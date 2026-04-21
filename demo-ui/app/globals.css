@@ -4,6 +4,7 @@
 
 /* これで背景を白、文字を黒に固定します */
 body {
-  background: rgb(12, 7, 7) !important;
-  color: rgb(70, 163, 155) !important;
+  background: rgb(15, 13, 13) !important;
+  color: #85ccc6 !important;
+  font-family: monospace;
 }
