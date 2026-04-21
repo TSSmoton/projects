@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* これで背景を白、文字を黒に固定します */
+body {
+  background: rgb(12, 7, 7) !important;
+  color: rgb(70, 163, 155) !important;
+}
