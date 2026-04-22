@@ -1,14 +1,34 @@
-"use client"; // Reactのフック（useStateなど）を使うために必要です
+"use client";
 
 import { useState } from "react";
-// あとで作成する「検索窓パーツ」を読み込みます
-// エラーが出る場合は path を ../src/components/PokemonSearch に書き換えてください
 import PokemonSearch from "../src/components/PokemonSearch";
+import MoveSearch from "../src/components/MoveSearch"; // ← 忘れずに作成してくださいね！
 
 export default function Home() {
-  // 選択されたポケモンのデータを保存する変数
   const [attacker, setAttacker] = useState<any>(null);
   const [defender, setDefender] = useState<any>(null);
+  const [selectedMove, setSelectedMove] = useState<any>(null);
+  const [selectedAbility, setSelectedAbility] = useState("");
+
+  // --- ダメージ計算ロジック ---
+  const calculateResult = () => {
+    if (!attacker || !defender || !selectedMove) return "データ不足";
+
+    // 物理なら「攻撃」、特殊なら「特攻」を自動で切り替える
+    const atkStat =
+      selectedMove.category === "物理" ? attacker.attack : attacker.spAttack;
+    const defStat =
+      selectedMove.category === "物理" ? defender.defense : defender.spDefense;
+    const power = selectedMove.power || 0;
+
+    if (power === 0) return "ダメージなし（変化技）";
+
+    // 簡易ダメージ計算式
+    // $Damage = ((2 \times Level/5 + 2) \times Power \times Atk / Def / 50 + 2)$
+    // 今回はレベル50固定(22)で計算
+    const damage = Math.floor((22 * power * atkStat) / defStat / 50 + 2);
+    return `${damage} ダメージ`;
+  };
 
   return (
     <main
@@ -22,7 +42,7 @@ export default function Home() {
       <h1
         style={{ textAlign: "center", color: "#1a1a1a", marginBottom: "30px" }}
       >
-        計算機
+        ダメージ計算機
       </h1>
 
       <div
@@ -48,7 +68,7 @@ export default function Home() {
           >
             攻撃側
           </h2>
-          <PokemonSearch label="検索" onSelect={setAttacker} />
+          <PokemonSearch label="ポケモン検索" onSelect={setAttacker} />
 
           {attacker && (
             <div
@@ -60,21 +80,57 @@ export default function Home() {
               }}
             >
               <h3>{attacker.name}</h3>
-              <p>
-                タイプ: {attacker.type1}{" "}
-                {attacker.type2 && `/ ${attacker.type2}`}
-              </p>
-              <div style={{ fontSize: "0.9rem", color: "#666" }}>
-                <p>
-                  HP: {attacker.hp} / 攻撃: {attacker.attack} / 防御:{" "}
-                  {attacker.defense}
-                </p>
-                <p>
-                  特攻: {attacker.spAttack} / 特防: {attacker.spDefense} /
-                  素早さ: {attacker.speed}
-                </p>
-                <strong>合計種族値: {attacker.totalStats}</strong>
-              </div>
+
+              {/* 特性選択：そのポケモンの持つ特性だけをリストにする */}
+              <label
+                style={{
+                  fontSize: "0.8rem",
+                  display: "block",
+                  marginTop: "10px",
+                }}
+              >
+                特性
+              </label>
+              <select
+                style={{
+                  width: "100%",
+                  padding: "5px",
+                  marginBottom: "15px",
+                  color: "black",
+                }}
+                onChange={(e) => setSelectedAbility(e.target.value)}
+              >
+                <option value={attacker.ability1}>{attacker.ability1}</option>
+                {attacker.ability2 && (
+                  <option value={attacker.ability2}>{attacker.ability2}</option>
+                )}
+                {attacker.hiddenAbility && (
+                  <option value={attacker.hiddenAbility}>
+                    {attacker.hiddenAbility} (夢)
+                  </option>
+                )}
+              </select>
+
+              {/* 技検索窓 */}
+              <MoveSearch onSelect={setSelectedMove} />
+
+              {selectedMove && (
+                <div
+                  style={{
+                    marginTop: "10px",
+                    fontSize: "0.8rem",
+                    borderTop: "1px dashed #ccc",
+                    paddingTop: "5px",
+                  }}
+                >
+                  <p>
+                    選択中の技: <strong>{selectedMove.name}</strong>
+                  </p>
+                  <p>
+                    威力: {selectedMove.power} / 分類: {selectedMove.category}
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </section>
@@ -94,7 +150,7 @@ export default function Home() {
           >
             防御側
           </h2>
-          <PokemonSearch label="検索" onSelect={setDefender} />
+          <PokemonSearch label="ポケモン検索" onSelect={setDefender} />
 
           {defender && (
             <div
@@ -107,21 +163,32 @@ export default function Home() {
             >
               <h3>{defender.name}</h3>
               <p>
-                タイプ: {defender.type1}{" "}
-                {defender.type2 && `/ ${defender.type2}`}
+                防御: {defender.defense} / 特防: {defender.spDefense}
               </p>
-              <div style={{ fontSize: "0.9rem", color: "#666" }}>
-                <p>
-                  HP: {defender.hp} / 防御: {defender.defense} / 特防:{" "}
-                  {defender.spDefense}
-                </p>
-              </div>
             </div>
           )}
         </section>
       </div>
 
-      {/* ここに将来「技の選択」や「計算ボタン」を追加します */}
+      {/* 計算結果セクション */}
+      <div style={{ marginTop: "40px", textAlign: "center" }}>
+        <div
+          style={{
+            display: "inline-block",
+            padding: "10px 20px",
+            backgroundColor: "#aedfff",
+            color: "white",
+            borderRadius: "15px",
+          }}
+        >
+          <p style={{ margin: 0, fontSize: "1.2rem", color: "#16335e" }}>
+            予想ダメージ
+          </p>
+          <h2 style={{ margin: 0, fontSize: "1.2rem", color: "#d85c77" }}>
+            {calculateResult()}
+          </h2>
+        </div>
+      </div>
     </main>
   );
 }
