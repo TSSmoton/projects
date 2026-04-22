@@ -9,6 +9,7 @@ import lombok.Data;
 public class Pokemon {
     @Id
     private Integer id;
+    private Integer speciesId;
     private String name;
     private String type1;
     private String type2;
@@ -16,7 +17,6 @@ public class Pokemon {
     private String ability2;
     private String hiddenAbility;
 
-    // --- ここを追加！ ---
     private Double weight; 
 
     private Integer hp;

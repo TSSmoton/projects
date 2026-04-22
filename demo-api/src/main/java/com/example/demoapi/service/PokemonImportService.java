@@ -37,9 +37,15 @@ public class PokemonImportService {
                 String baseJpName = getJapaneseName(speciesRes);
 
                 List<Map<String, Object>> varieties = (List<Map<String, Object>>) speciesRes.get("varieties");
+                // for (Map<String, Object> v : varieties) {
+                //     Map<String, Object> pInfo = (Map<String, Object>) v.get("pokemon");
+                //     processAndSave(baseJpName, (String) pInfo.get("url"), (boolean) v.get("is_default"));
+                // }
+
                 for (Map<String, Object> v : varieties) {
                     Map<String, Object> pInfo = (Map<String, Object>) v.get("pokemon");
-                    processAndSave(baseJpName, (String) pInfo.get("url"), (boolean) v.get("is_default"));
+                    // 第1引数に「i (speciesId)」を追加して渡す
+                    processAndSave(i, baseJpName, (String) pInfo.get("url"), (boolean) v.get("is_default"));
                 }
             } catch (Exception e) {
                 System.err.println("エラー (ID:" + i + "): " + e.getMessage());
@@ -47,21 +53,37 @@ public class PokemonImportService {
         }
     }
 
-    private void processAndSave(String baseName, String url, boolean isDefault) {
+    // private void processAndSave(String baseName, String url, boolean isDefault) {
+    //     Map<String, Object> data = restTemplate.getForObject(url, Map.class);
+    //     Integer id = (Integer) data.get("id");
+    //     String enName = (String) data.get("name");
+    //     String finalName = isDefault ? baseName : formatVariantName(baseName, enName);
+
+    //     saveToDb(id, finalName, data);
+    //     System.out.println("インポート成功: " + finalName + " (ID:" + id + ")");
+    // }
+
+
+    // 個別処理
+    private void processAndSave(Integer speciesId, String baseName, String url, boolean isDefault) {
         Map<String, Object> data = restTemplate.getForObject(url, Map.class);
         Integer id = (Integer) data.get("id");
+        // ... (名前の決定ロジック) ...
         String enName = (String) data.get("name");
         String finalName = isDefault ? baseName : formatVariantName(baseName, enName);
-
-        saveToDb(id, finalName, data);
-        System.out.println("インポート成功: " + finalName + " (ID:" + id + ")");
+        // saveToDbに speciesId も渡す
+        saveToDb(id, speciesId, finalName, data);
     }
 
-    private void saveToDb(Integer id, String name, Map<String, Object> pokeData) {
+    // private void saveToDb(Integer id, String name, Map<String, Object> pokeData) {
+    //     Pokemon p = new Pokemon();
+    //     p.setId(id);
+    //     p.setName(name);
+    private void saveToDb(Integer id, Integer speciesId, String name, Map<String, Object> pokeData) {
         Pokemon p = new Pokemon();
         p.setId(id);
+        p.setSpeciesId(speciesId); // ここでセット！
         p.setName(name);
-
         // --- 体重の抽出（100g単位をkgに変換） ---
         // pokeData.get("weight") は Integer で返ってくるので、10.0 で割って Double にします
         Integer weightRaw = (Integer) pokeData.get("weight");
