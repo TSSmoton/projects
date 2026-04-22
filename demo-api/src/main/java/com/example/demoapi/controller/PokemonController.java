@@ -32,13 +32,14 @@ public class PokemonController {
         return "インポート処理を開始しました。ターミナルのログを確認してください。";
     }
 
-    // @GetMapping("/all")
-    // public List<Pokemon> getAllPokemon() {
-    //     return pokemonRepository.findAll();
-    // }
+
     @GetMapping("/all")
     public List<Pokemon> getAllPokemon() {
         // 以前の findAll() ではなく、並び替え版を呼び出す
         return pokemonRepository.findAllByOrderBySpeciesIdAscIdAsc();
+    }
+    @GetMapping("/search")
+    public List<Pokemon> searchPokemon(@RequestParam String name) {
+        return pokemonRepository.findByNameContaining(name);
     }
 }

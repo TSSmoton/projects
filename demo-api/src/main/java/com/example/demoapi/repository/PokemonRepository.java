@@ -9,4 +9,5 @@ import java.util.List;
 public interface PokemonRepository extends JpaRepository<Pokemon, Integer> {
     // これだけで保存や検索ができるようになります
     List<Pokemon> findAllByOrderBySpeciesIdAscIdAsc();
+    List<Pokemon> findByNameContaining(String name);
 }
