@@ -691,7 +691,11 @@ export default function Home() {
           <h2 style={{ color: "#ff4d4d", borderBottom: "2px solid" }}>
             攻撃側
           </h2>
-          <PokemonSearch label="ポケモン" onSelect={handleAttackerSelect} />
+          <PokemonSearch
+            label="攻撃側ポケモン"
+            onSelect={setAttacker}
+            selectedPokemon={attacker} // ✅ これを追加！
+          />
           {attacker && (
             <div style={{ marginTop: "15px", textAlign: "center" }}>
               <div
@@ -1159,7 +1163,11 @@ export default function Home() {
                 )}
               </div>
               <div style={{ marginTop: "15px" }}>
-                <MoveSearch onSelect={setSelectedMove} />
+                {/* 攻撃側の技検索 */}
+                <MoveSearch
+                  onSelect={setSelectedMove}
+                  selectedPokemonId={attacker?.id} // ✅ ポケモンIDを渡す
+                />
                 {/* --- ここから追加：選択された技の詳細表示 --- */}
                 {selectedMove && (
                   <div
@@ -1289,7 +1297,11 @@ export default function Home() {
           <h2 style={{ color: "#4d79ff", borderBottom: "2px solid" }}>
             防御側
           </h2>
-          <PokemonSearch label="ポケモン" onSelect={handleDefenderSelect} />
+          <PokemonSearch
+            label="防御側ポケモン"
+            onSelect={setDefender}
+            selectedPokemon={defender} // ✅ これを追加！
+          />
           {defender && (
             <div style={{ marginTop: "15px", textAlign: "center" }}>
               {/* 防御側の画像表示 */}

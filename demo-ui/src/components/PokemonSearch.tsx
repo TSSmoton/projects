@@ -1,47 +1,76 @@
 "use client";
 
-import React, { useState } from "react";
+// ✅ 修正: useEffect をインポートに追加
+import React, { useState, useEffect } from "react";
 import { searchPokemon } from "../services/api";
+
+// ※Pokemonの型定義がない場合は追加（すでに別ファイルで定義されていれば不要です）
+interface Pokemon {
+  id: number;
+  name: string;
+  // ... 他のプロパティ
+}
 
 interface PokemonSearchProps {
   label: string;
   onSelect: (pokemon: Pokemon) => void;
+  // ✅ 追加: 親から「いま選ばれているポケモン」を受け取る
+  selectedPokemon?: Pokemon | null;
 }
 
-export default function PokemonSearch({ label, onSelect }: PokemonSearchProps) {
+// ✅ 修正: 引数に selectedPokemon を追加
+export default function PokemonSearch({
+  label,
+  onSelect,
+  selectedPokemon,
+}: PokemonSearchProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Pokemon[]>([]);
-  // ✅ 追加：キーボードで選択中のインデックス（-1 は未選択）
   const [focusedIndex, setFocusedIndex] = useState(-1);
 
-  // ✅ 追加：キーボード操作の処理
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (results.length === 0) return;
+  // 💥 ここが一番重要！ 💥
+  // 親コンポーネント（page.tsx）で「⇄」ボタンが押されて selectedPokemon が切り替わったら、
+  // この中身が自動的に走って、テキストボックスの文字を新しいポケモンの名前に書き換えます。
+// 💥 修正：同期的なState更新を避けるため、非同期関数でラップする
+  useEffect(() => {
+    let isMounted = true;
+
+    const syncQuery = async () => {
+      if (isMounted) {
+        // selectedPokemon があればその名前を、なければ空文字をセット
+        setQuery(selectedPokemon?.name || "");
+      }
+    };
+
+    syncQuery();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedPokemon]);
 
     if (e.key === "ArrowDown") {
-      e.preventDefault(); // 画面がスクロールするのを防ぐ
+      e.preventDefault();
       setFocusedIndex((prev) => (prev < results.length - 1 ? prev + 1 : prev));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setFocusedIndex((prev) => (prev > 0 ? prev - 1 : 0));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      // フォーカスされている項目があれば、それを決定する
       if (focusedIndex >= 0 && focusedIndex < results.length) {
         const selected = results[focusedIndex];
         onSelect(selected);
         setQuery(selected.name);
         setResults([]);
-        setFocusedIndex(-1); // リセット
+        setFocusedIndex(-1);
       }
     }
   };
 
-  // ✅ 既存の入力ハンドラ（文字が打ち直されたらフォーカスをリセットする処理を追加）
   const handleInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setQuery(val);
-    setFocusedIndex(-1); // 文字が入力されたら選択位置をリセット
+    setFocusedIndex(-1);
     if (val.length > 0) {
       try {
         const data = await searchPokemon(val);
@@ -61,7 +90,7 @@ export default function PokemonSearch({ label, onSelect }: PokemonSearchProps) {
         type="text"
         value={query}
         onChange={handleInput}
-        onKeyDown={handleKeyDown} // ✅ 追加：キーボードイベントを紐付け
+        onKeyDown={handleKeyDown}
         placeholder={`${label}の名前...`}
         style={{
           width: "95%",
@@ -102,7 +131,6 @@ export default function PokemonSearch({ label, onSelect }: PokemonSearchProps) {
                 padding: "8px",
                 cursor: "pointer",
                 borderBottom: "1px solid #eee",
-                // ✅ 修正：現在フォーカスされている項目の背景色を少し濃くする
                 backgroundColor: index === focusedIndex ? "#e0f2fe" : "white",
                 color: "black",
               }}

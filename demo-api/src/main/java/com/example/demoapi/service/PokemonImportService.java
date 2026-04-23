@@ -6,6 +6,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import java.util.*;
+import com.example.demoapi.entity.Move;
+import com.example.demoapi.repository.MoveRepository;
 
 @Service
 public class PokemonImportService {
@@ -14,6 +16,9 @@ public class PokemonImportService {
     private PokemonRepository pokemonRepository;
 
     @Autowired
+    private MoveRepository moveRepository;
+
+    @Autowired  
     private RestTemplate restTemplate;
 
     // --- 【新兵器】特性の日本語名を一時保存するメモ帳（キャッシュ） ---
@@ -131,6 +136,33 @@ public class PokemonImportService {
 
         // 全てを足して「合計種族値」としてセット！
         p.setTotalStats(hp + atk + def + spa + spd + spe);
+
+// 👇==== ここから追加 ====👇
+        // --- 覚える技の解析 ---
+        List<Map<String, Object>> movesList = (List<Map<String, Object>>) pokeData.get("moves");
+        List<Integer> moveIds = new ArrayList<>(); // 技IDだけを一旦集めるリスト
+
+        if (movesList != null) {
+            for (Map<String, Object> moveEntry : movesList) {
+                Map<String, Object> moveInfo = (Map<String, Object>) moveEntry.get("move");
+                String moveUrl = (String) moveInfo.get("url"); // 例: https://pokeapi.co/api/v2/move/89/
+
+                // URLから技IDを抽出
+                String[] urlParts = moveUrl.split("/");
+                try {
+                    Integer moveId = Integer.parseInt(urlParts[urlParts.length - 1]);
+                    moveIds.add(moveId); // IDだけをリストに貯める
+                } catch (NumberFormatException e) {
+                    System.err.println("技IDのパースに失敗しました: " + moveUrl);
+                }
+            }
+        }
+
+        // 貯めた技IDを使って、DBから「一括で」技エンティティを取得（超高速化！）
+        List<Move> learnableMoves = moveRepository.findAllById(moveIds);
+        p.setLearnableMoves(learnableMoves);
+        // 👆==== ここまで追加 ====👆
+
         pokemonRepository.save(p);
     }
 

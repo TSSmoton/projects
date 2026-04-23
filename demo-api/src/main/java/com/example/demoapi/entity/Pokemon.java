@@ -2,8 +2,12 @@ package com.example.demoapi.entity; // 1行目は必ずこれ
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
 import lombok.Data;
 
+import java.util.List;
 @Entity
 @Data
 public class Pokemon {
@@ -26,4 +30,14 @@ public class Pokemon {
     private Integer spDefense;
     private Integer speed;
     private Integer totalStats;
+
+    // ✅ ここから追加！
+    // 「1匹のポケモンが複数の技を覚え、1つの技を複数のポケモンが覚える」多対多の設定
+    @ManyToMany
+    @JoinTable(
+        name = "pokemon_moves", // DBに自動生成される中間テーブルの名前
+        joinColumns = @JoinColumn(name = "pokemon_id"), // ポケモン側のキー
+        inverseJoinColumns = @JoinColumn(name = "move_id") // 技側のキー
+    )
+    private List<Move> learnableMoves; // このポケモンが覚える技のリスト
 }
