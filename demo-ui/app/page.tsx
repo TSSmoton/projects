@@ -289,6 +289,7 @@ const RELEVANT_ABILITIES = [
   { name: "かたいツメ", multiplier: 1.3 }, // 直接攻撃1.3倍
   { name: "マルチスケイル", multiplier: 0.5 }, // ダメージ半減
   { name: "いかく", multiplier: 1.0 },
+  { name: "こんじょう", multiplier: 1.5 }, // ✅ 追加（状態異常で攻撃1.5倍）
 ];
 
 // ランク補正の倍率表（-6〜+6）
@@ -306,6 +307,54 @@ const RANK_MODIFIERS: Record<number, number> = {
   "4": 3.0,
   "5": 3.5,
   "6": 4.0,
+};
+// app/page.tsx (Homeコンポーネントの外)
+
+// ✅ 追加：タイプごとの色定義（原作準拠）
+const TYPE_COLORS: Record<string, { bg: string; text: string }> = {
+  ノーマル: { bg: "#A8A878", text: "#fff" },
+  ほのお: { bg: "#F08030", text: "#fff" },
+  みず: { bg: "#6890F0", text: "#fff" },
+  でんき: { bg: "#F8D030", text: "#333" }, // 電気は文字を少し暗く
+  くさ: { bg: "#78C850", text: "#fff" },
+  こおり: { bg: "#98D8D8", text: "#333" }, // 氷も文字を少し暗く
+  かくとう: { bg: "#C03028", text: "#fff" },
+  どく: { bg: "#A040A0", text: "#fff" },
+  じめん: { bg: "#E0C068", text: "#333" }, // 地面も文字を少し暗く
+  ひこう: { bg: "#A890F0", text: "#fff" },
+  エスパー: { bg: "#F85888", text: "#fff" },
+  むし: { bg: "#A8B820", text: "#fff" },
+  いわ: { bg: "#B8A038", text: "#fff" },
+  ゴースト: { bg: "#705898", text: "#fff" },
+  ドラゴン: { bg: "#4538f8", text: "#fff" },
+  あく: { bg: "#705848", text: "#fff" },
+  はがね: { bg: "#B8B8D0", text: "#333" }, // 鋼も文字を少し暗く
+  フェアリー: { bg: "#EE99AC", text: "#fff" },
+};
+
+// ✅ 追加：タイプアイコンコンポーネント
+const TypeBadge = ({ type }: { type: string }) => {
+  const colors = TYPE_COLORS[type] || { bg: "#666", text: "#fff" }; // 未定義タイプへのフォールバック
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        padding: "2px 8px",
+        borderRadius: "6px", // 丸みを持たせる
+        fontSize: "0.7rem",
+        fontWeight: "bold",
+        backgroundColor: colors.bg,
+        color: colors.text,
+        textShadow:
+          colors.text === "#fff" ? "0 1px 1px rgba(0,0,0,0.5)" : "none", // 白文字の場合影をつけて視認性向上
+        marginLeft: "4px", // 2つのタイプがある場合の隙間
+        border: "1px solid rgba(0,0,0,0.2)", // 少し立体感を出す
+        boxShadow: "0 1px 2px rgba(0,0,0,0.2)", // 少し影をつける
+      }}
+    >
+      {type}
+    </span>
+  );
 };
 
 export default function Home() {
@@ -331,6 +380,8 @@ export default function Home() {
   // ランク補正のState（-6 〜 +6）
   const [atkRank, setAtkRank] = useState(0);
   const [defRank, setDefRank] = useState(0);
+  // 攻撃側のやけど状態
+  const [isAtkBurned, setIsAtkBurned] = useState(false);
   /**
    * 新システム対応：ステータス実数値計算
    * @param evLevel 0〜32の努力レベル
@@ -357,7 +408,6 @@ export default function Home() {
     );
   };
 
-  // --- ダメージ計算ロジック ---
   // --- ダメージ計算ロジック ---
   const calculateResult = () => {
     if (!attacker || !defender || !selectedMove) return null;
@@ -402,6 +452,17 @@ export default function Home() {
 
     if (atkItem.type === (isPhysical ? "atk" : "spa")) {
       a = Math.floor(a * atkItem.multiplier);
+    }
+
+    // やけど ＆ こんじょうの処理
+    if (isAtkBurned && isPhysical) {
+      if (atkAbility === "こんじょう") {
+        // こんじょうなら攻撃1.5倍（やけどの半減は無視）
+        a = Math.floor(a * atkAbil.multiplier);
+      } else {
+        // それ以外なら攻撃0.5倍
+        a = Math.floor(a * 0.5);
+      }
     }
 
     // 2. 防御力のステータス計算
@@ -513,8 +574,16 @@ export default function Home() {
           <PokemonSearch label="ポケモン" onSelect={setAttacker} />
           {attacker && (
             <div style={{ marginTop: "15px", textAlign: "center" }}>
-              {/* 攻撃側の画像表示 */}
-              {/* <img
+              <div
+                style={{
+                  position: "relative",
+                  display: "inline-block",
+                  marginBottom: "10px",
+                  width: "70%",
+                }}
+              >
+                {/* 攻撃側の画像表示 */}
+                {/* <img
                 src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${attacker.id}.png`}
                 alt={attacker.name}
                 style={{
@@ -523,17 +592,33 @@ export default function Home() {
                   marginBottom: "10px",
                 }}
               /> */}
-              {/* 外部サイトではなく、自前の /public/pokemon/ フォルダから読み込む */}
-              <Image
-                src={`/pokemon/${attacker.id}.png`}
-                alt={attacker.name}
-                width={100}
-                height={100}
-                // ローカル画像なので priority をつけると表示が早くなります
-                priority
-                // 画像がない場合のエラー対策
-                style={{ objectFit: "contain" }}
-              />
+                {/* 外部サイトではなく、自前の /public/pokemon/ フォルダから読み込む */}
+                <Image
+                  src={`/pokemon/${attacker.id}.png`}
+                  alt={attacker.name}
+                  width={100}
+                  height={100}
+                  // ローカル画像なので priority をつけると表示が早くなります
+                  priority
+                  // 画像がない場合のエラー対策
+                  style={{ objectFit: "contain" }}
+                />
+                {/* ✅ 追加：タイプアイコン（右上絶対配置） */}
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "0",
+                    right: "-10px",
+                    display: "flex",
+                    gap: "2px",
+                    flexDirection: "column",
+                    alignItems: "flex-end",
+                  }}
+                >
+                  <TypeBadge type={attacker.type1} />
+                  {attacker.type2 && <TypeBadge type={attacker.type2} />}
+                </div>
+              </div>
               {/* 全種族値を表示（物理・特殊どちらも確認可能） */}
               <p
                 style={{
@@ -615,6 +700,51 @@ export default function Home() {
                   </div>
                 );
               })()}{" "}
+              {/* 性格補正 */}
+              <div style={{ marginTop: "10px" }}>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.8rem",
+                    marginBottom: "5px",
+                  }}
+                >
+                  性格補正
+                </label>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "8px",
+                    fontSize: "0.8rem",
+                    justifyContent: "center",
+                  }}
+                >
+                  {[
+                    { label: "上昇 (1.1x)", value: 1.1 },
+                    { label: "なし (1.0x)", value: 1.0 },
+                    { label: "下降 (0.9x)", value: 0.9 },
+                  ].map((opt) => (
+                    <label
+                      key={opt.value}
+                      style={{
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "4px",
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="atkNature" // 攻撃側で統一
+                        value={opt.value}
+                        checked={atkNature === opt.value}
+                        onChange={(e) => setAtkNature(Number(e.target.value))}
+                      />
+                      {opt.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
               {/* 持ち物と特性の選択エリア */}
               <div
                 style={{
@@ -677,72 +807,186 @@ export default function Home() {
                   </select>
                 </div>
               </div>
-              {/* ランク補正（いかく連動用） */}
+              {/* 攻撃側のランク補正 */}
               <div
                 style={{
                   marginTop: "10px",
                   display: "flex",
                   alignItems: "center",
-                  gap: "10px",
+                  gap: "8px",
+                  flexWrap: "wrap", // 画面が狭い時に折り返す
                 }}
               >
-                <label style={{ fontSize: "0.7rem" }}>ランク</label>
-                <input
-                  type="number"
-                  min="-6"
-                  max="6"
-                  value={atkRank}
-                  onChange={(e) => setAtkRank(Number(e.target.value))}
-                  style={{ width: "45px", color: "black" }}
-                />
-                <span style={{ fontSize: "0.7rem", color: "#888" }}>
-                  ({RANK_MODIFIERS[atkRank]}x)
-                </span>
-              </div>
-              {/* 性格補正 */}
-              <div style={{ marginTop: "15px" }}>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "0.8rem",
-                    marginBottom: "5px",
-                  }}
-                >
-                  性格補正
+                <label style={{ fontSize: "0.8rem", fontWeight: "bold" }}>
+                  ランク
                 </label>
+
+                {/* ＋とーの大きなステッパー */}
                 <div
                   style={{
                     display: "flex",
-                    gap: "8px",
-                    fontSize: "0.8rem",
-                    justifyContent: "center",
+                    alignItems: "center",
+                    border: "1px solid #ccc",
+                    borderRadius: "6px",
+                    overflow: "hidden",
                   }}
                 >
-                  {[
-                    { label: "上昇 (1.1x)", value: 1.1 },
-                    { label: "なし (1.0x)", value: 1.0 },
-                    { label: "下降 (0.9x)", value: 0.9 },
-                  ].map((opt) => (
-                    <label
-                      key={opt.value}
-                      style={{
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "4px",
-                      }}
-                    >
-                      <input
-                        type="radio"
-                        name="atkNature" // 攻撃側で統一
-                        value={opt.value}
-                        checked={atkNature === opt.value}
-                        onChange={(e) => setAtkNature(Number(e.target.value))}
-                      />
-                      {opt.label}
-                    </label>
-                  ))}
+                  <button
+                    onClick={() => setAtkRank((prev) => Math.max(-6, prev - 1))}
+                    style={{
+                      width: "30px",
+                      height: "30px",
+                      backgroundColor: "#f0f0f0",
+                      border: "none",
+                      cursor: "pointer",
+                      fontSize: "1.2rem",
+                      color: "#333",
+                    }}
+                  >
+                    −
+                  </button>
+
+                  <input
+                    type="number"
+                    min="-6"
+                    max="6"
+                    value={atkRank}
+                    onChange={(e) => setAtkRank(Number(e.target.value))}
+                    style={{
+                      width: "40px",
+                      height: "30px",
+                      textAlign: "center",
+                      border: "none",
+                      borderLeft: "1px solid #ccc",
+                      borderRight: "1px solid #ccc",
+                      color: "black",
+                      margin: 0,
+                      outline: "none",
+                    }}
+                  />
+
+                  <button
+                    onClick={() => setAtkRank((prev) => Math.min(6, prev + 1))}
+                    style={{
+                      width: "30px",
+                      height: "30px",
+                      backgroundColor: "#f0f0f0",
+                      border: "none",
+                      cursor: "pointer",
+                      fontSize: "1.2rem",
+                      color: "#333",
+                    }}
+                  >
+                    ＋
+                  </button>
                 </div>
+
+                {/* よく使うクイックボタン */}
+                <div style={{ display: "flex", gap: "4px" }}>
+                  <button
+                    onClick={() => setAtkRank((prev) => Math.max(-6, prev - 2))}
+                    style={{
+                      fontSize: "0.7rem",
+                      padding: "4px 8px",
+                      borderRadius: "4px",
+                      border: "1px solid #ccc",
+                      backgroundColor: "#fff",
+                      cursor: "pointer",
+                      color: "#333",
+                    }}
+                  >
+                    -2
+                  </button>
+                  <button
+                    onClick={() => setAtkRank(0)}
+                    style={{
+                      fontSize: "0.7rem",
+                      padding: "4px 8px",
+                      borderRadius: "4px",
+                      border: "1px solid #ccc",
+                      backgroundColor: "#fff",
+                      cursor: "pointer",
+                      color: "#333",
+                    }}
+                  >
+                    0
+                  </button>
+                  <button
+                    onClick={() => setAtkRank((prev) => Math.min(6, prev + 2))}
+                    style={{
+                      fontSize: "0.7rem",
+                      padding: "4px 8px",
+                      borderRadius: "4px",
+                      border: "1px solid #ccc",
+                      backgroundColor: "#fff",
+                      cursor: "pointer",
+                      color: "#333",
+                    }}
+                  >
+                    +2
+                  </button>
+                </div>
+
+                <span
+                  style={{
+                    fontSize: "0.8rem",
+                    color: "#ff4d4d",
+                    fontWeight: "bold",
+                    marginLeft: "auto",
+                  }}
+                >
+                  ({RANK_MODIFIERS[atkRank]}x)
+                </span>
+              </div>
+              {/* 状態異常（やけど） */}
+              <div
+                style={{
+                  marginTop: "10px",
+                  display: "flex",
+                  alignItems: "center",
+                  flexWrap: "wrap", // 画面が狭い時に折り返す
+                }}
+              >
+                <label
+                  style={{
+                    fontSize: "0.8rem",
+                    display: "flex",
+                    alignItems: "center",
+                    cursor: "pointer",
+                    color: isAtkBurned ? "#d32f2f" : "#333",
+                    fontWeight: isAtkBurned ? "bold" : "normal",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isAtkBurned}
+                    onChange={(e) => setIsAtkBurned(e.target.checked)}
+                    style={{
+                      marginRight: "6px",
+                      accentColor: "#d32f2f",
+                      width: "16px",
+                      height: "16px",
+                      cursor: "pointer",
+                    }}
+                  />
+                  やけど状態
+                </label>
+                {/* こんじょう発動時のアピール */}
+                {isAtkBurned && atkAbility === "こんじょう" && (
+                  <span
+                    style={{
+                      marginLeft: "10px",
+                      fontSize: "0.7rem",
+                      color: "#d97706",
+                      backgroundColor: "#fef3c7",
+                      padding: "2px 6px",
+                      borderRadius: "4px",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    こんじょう発動(1.5x)
+                  </span>
+                )}
               </div>
               <div style={{ marginTop: "15px" }}>
                 <MoveSearch onSelect={setSelectedMove} />
@@ -788,22 +1032,34 @@ export default function Home() {
                     >
                       <span>タイプ: {selectedMove.type}</span>
                       <span>分類: {selectedMove.category}</span>
-                      {/* タイプ一致の判定例 */}
+                      {/* タイプ一致の判定例（てきおうりょく対応版） */}
                       {(selectedMove.type === attacker.type1 ||
                         selectedMove.type === attacker.type2) && (
                         <span
                           style={{
                             marginLeft: "auto",
                             fontSize: "0.7rem",
-                            color: "#e67e22",
-                            backgroundColor: "#fef5e7",
+                            // てきおうりょくなら赤系、通常ならオレンジ系に切り替え
+                            color:
+                              atkAbility === "てきおうりょく"
+                                ? "#d32f2f"
+                                : "#e67e22",
+                            backgroundColor:
+                              atkAbility === "てきおうりょく"
+                                ? "#ffebee"
+                                : "#fef5e7",
+                            border: `1px solid ${atkAbility === "てきおうりょく" ? "#ffcdd2" : "#fad7a0"}`,
                             padding: "2px 5px",
                             borderRadius: "4px",
-                            border: "1px solid #fad7a0",
                             alignItems: "right",
+                            fontWeight:
+                              atkAbility === "てきおうりょく"
+                                ? "bold"
+                                : "normal",
                           }}
                         >
-                          タイプ一致(1.5x)
+                          タイプ一致(
+                          {atkAbility === "てきおうりょく" ? "2.0x" : "1.5x"})
                         </span>
                       )}
                     </div>
@@ -841,13 +1097,39 @@ export default function Home() {
                 }}
               /> */}
               {/* 外部サイトではなく、自前の /public/pokemon/ フォルダから読み込む */}
-              <Image
-                src={`/pokemon/${defender.id}.png`}
-                alt={defender.name}
-                width={100}
-                height={100}
-                style={{ objectFit: "contain" }}
-              />
+              <div
+                style={{
+                  position: "relative",
+                  display: "inline-block",
+                  marginBottom: "10px",
+                  width: "70%",
+                }}
+              >
+                {/* 外部サイトではなく、自前の /public/pokemon/ フォルダから読み込む */}
+                <Image
+                  src={`/pokemon/${defender.id}.png`}
+                  alt={defender.name}
+                  width={100}
+                  height={100}
+                  style={{ objectFit: "contain" }}
+                />
+
+                {/* ✅ 追加：タイプアイコン（右上絶対配置） */}
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "0",
+                    right: "-10px",
+                    display: "flex",
+                    gap: "2px",
+                    flexDirection: "column",
+                    alignItems: "flex-end",
+                  }}
+                >
+                  <TypeBadge type={defender.type1} />
+                  {defender.type2 && <TypeBadge type={defender.type2} />}
+                </div>
+              </div>
               {/* 種族値 */}
               <p
                 style={{
@@ -998,6 +1280,50 @@ export default function Home() {
                   </div>
                 );
               })()}
+              <div style={{ marginTop: "10px" }}>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.8rem",
+                    marginBottom: "5px",
+                  }}
+                >
+                  性格補正
+                </label>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "8px",
+                    fontSize: "0.8rem",
+                    justifyContent: "center",
+                  }}
+                >
+                  {[
+                    { label: "上昇 (1.1x)", value: 1.1 },
+                    { label: "なし (1.0x)", value: 1.0 },
+                    { label: "下降 (0.9x)", value: 0.9 },
+                  ].map((opt) => (
+                    <label
+                      key={opt.value}
+                      style={{
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "4px",
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="defNature" // 防御側で統一
+                        value={opt.value}
+                        checked={defNature === opt.value}
+                        onChange={(e) => setDefNature(Number(e.target.value))}
+                      />
+                      {opt.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
 
               {/* 防御側の持ち物と特性の選択エリア */}
               <div
@@ -1071,66 +1397,130 @@ export default function Home() {
                   marginTop: "10px",
                   display: "flex",
                   alignItems: "center",
-                  gap: "10px",
+                  gap: "8px",
+                  flexWrap: "wrap",
                 }}
               >
-                <label style={{ fontSize: "0.7rem" }}>ランク</label>
-                <input
-                  type="number"
-                  min="-6"
-                  max="6"
-                  value={defRank}
-                  onChange={(e) => setDefRank(Number(e.target.value))}
-                  style={{ width: "45px", color: "black" }}
-                />
-                <span style={{ fontSize: "0.7rem", color: "#888" }}>
-                  ({RANK_MODIFIERS[defRank]}x)
-                </span>
-              </div>
-
-              <div style={{ marginTop: "15px" }}>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "0.8rem",
-                    marginBottom: "5px",
-                  }}
-                >
-                  性格補正
+                <label style={{ fontSize: "0.8rem", fontWeight: "bold" }}>
+                  ランク
                 </label>
+
+                {/* ＋とーの大きなステッパー */}
                 <div
                   style={{
                     display: "flex",
-                    gap: "8px",
-                    fontSize: "0.8rem",
-                    justifyContent: "center",
+                    alignItems: "center",
+                    border: "1px solid #ccc",
+                    borderRadius: "6px",
+                    overflow: "hidden",
                   }}
                 >
-                  {[
-                    { label: "上昇 (1.1x)", value: 1.1 },
-                    { label: "なし (1.0x)", value: 1.0 },
-                    { label: "下降 (0.9x)", value: 0.9 },
-                  ].map((opt) => (
-                    <label
-                      key={opt.value}
-                      style={{
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "4px",
-                      }}
-                    >
-                      <input
-                        type="radio"
-                        name="defNature" // 防御側で統一
-                        value={opt.value}
-                        checked={defNature === opt.value}
-                        onChange={(e) => setDefNature(Number(e.target.value))}
-                      />
-                      {opt.label}
-                    </label>
-                  ))}
+                  <button
+                    onClick={() => setDefRank((prev) => Math.max(-6, prev - 1))}
+                    style={{
+                      width: "30px",
+                      height: "30px",
+                      backgroundColor: "#f0f0f0",
+                      border: "none",
+                      cursor: "pointer",
+                      fontSize: "1.2rem",
+                      color: "#333",
+                    }}
+                  >
+                    −
+                  </button>
+
+                  <input
+                    type="number"
+                    min="-6"
+                    max="6"
+                    value={defRank}
+                    onChange={(e) => setDefRank(Number(e.target.value))}
+                    style={{
+                      width: "40px",
+                      height: "30px",
+                      textAlign: "center",
+                      border: "none",
+                      borderLeft: "1px solid #ccc",
+                      borderRight: "1px solid #ccc",
+                      color: "black",
+                      margin: 0,
+                      outline: "none",
+                    }}
+                  />
+
+                  <button
+                    onClick={() => setDefRank((prev) => Math.min(6, prev + 1))}
+                    style={{
+                      width: "30px",
+                      height: "30px",
+                      backgroundColor: "#f0f0f0",
+                      border: "none",
+                      cursor: "pointer",
+                      fontSize: "1.2rem",
+                      color: "#333",
+                    }}
+                  >
+                    ＋
+                  </button>
                 </div>
+
+                {/* よく使うクイックボタン */}
+                <div style={{ display: "flex", gap: "4px" }}>
+                  <button
+                    onClick={() => setDefRank((prev) => Math.max(-6, prev - 2))}
+                    style={{
+                      fontSize: "0.7rem",
+                      padding: "4px 8px",
+                      borderRadius: "4px",
+                      border: "1px solid #ccc",
+                      backgroundColor: "#fff",
+                      cursor: "pointer",
+                      color: "#333",
+                    }}
+                  >
+                    -2
+                  </button>
+                  <button
+                    onClick={() => setDefRank(0)}
+                    style={{
+                      fontSize: "0.7rem",
+                      padding: "4px 8px",
+                      borderRadius: "4px",
+                      border: "1px solid #ccc",
+                      backgroundColor: "#fff",
+                      cursor: "pointer",
+                      color: "#333",
+                    }}
+                  >
+                    0
+                  </button>
+                  <button
+                    onClick={() => setDefRank((prev) => Math.min(6, prev + 2))}
+                    style={{
+                      fontSize: "0.7rem",
+                      padding: "4px 8px",
+                      borderRadius: "4px",
+                      border: "1px solid #ccc",
+                      backgroundColor: "#fff",
+                      cursor: "pointer",
+                      color: "#333",
+                    }}
+                  >
+                    +2
+                  </button>
+                </div>
+
+                <span
+                  style={{
+                    fontSize: "0.8rem",
+                    color: "#4d79ff",
+                    fontWeight: "bold",
+                    marginLeft: "auto",
+                  }}
+                >
+                  ({RANK_MODIFIERS[defRank]}x)
+                </span>
               </div>
             </div>
           )}
