@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+// import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import PokemonSearch from "../src/components/PokemonSearch";
 import MoveSearch from "../src/components/MoveSearch";
 import Image from "next/image";
@@ -187,6 +188,48 @@ const BaseStatsSummary = ({ pokemon }: { pokemon: Pokemon }) => (
     <div style={{ textAlign: "center" }}>すばやさ: {pokemon.speed}</div>
   </div>
 );
+// ✅ 追加：絶対に画面をスクロールさせない数値入力コンポーネント
+const WheelNumberInput = ({
+  value,
+  onChange,
+  min = 0,
+  max = 32,
+}: {
+  value: number;
+  onChange: (val: number) => void;
+  min?: number;
+  max?: number;
+}) => {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const elem = inputRef.current;
+    if (!elem) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault(); // passive: false のおかげで確実にスクロールが止まる
+      const step = e.deltaY < 0 ? 1 : -1;
+      onChange(Math.min(max, Math.max(min, value + step)));
+    };
+
+    // passive: false を指定してネイティブのイベントリスナーを登録
+    elem.addEventListener("wheel", handleWheel, { passive: false });
+    return () => elem.removeEventListener("wheel", handleWheel);
+  }, [value, onChange, min, max]);
+
+  return (
+    <input
+      ref={inputRef}
+      type="number"
+      min={min}
+      max={max}
+      value={value}
+      onChange={(e) => onChange(Number(e.target.value))}
+      style={{ width: "60px", color: "black" }}
+    />
+  );
+};
+
 // ダメージバーコンポーネント
 const DamageBar = ({
   hp,
@@ -431,25 +474,34 @@ export default function Home() {
   const handleAttackerSelect = (p: Pokemon) => {
     setAttacker(p);
     const abilities = getAbilitiesArray(p);
+    // セットする特性を一旦変数に入れる
+    const initialAbility = isMega(p.name)
+      ? abilities[0] || "メガストーン"
+      : abilities[0] || "なし";
 
     if (isMega(p.name)) {
       setAtkItem(ITEMS[0]); // 持ち物「なし」に強制
-      setAtkAbility(abilities[0] || "なし"); // メガ特性に固定
-    } else {
-      setAtkAbility(abilities[0] || "なし"); // 通常時は第一特性をセット
     }
+    setAtkAbility(initialAbility);
   };
 
   // ✅ 防御側のポケモンを選んだ時の処理
   const handleDefenderSelect = (p: Pokemon) => {
     setDefender(p);
     const abilities = getAbilitiesArray(p);
+    // セットする特性を一旦変数に入れる
+    const initialAbility = isMega(p.name)
+      ? abilities[0] || "メガストーン"
+      : abilities[0] || "なし";
 
     if (isMega(p.name)) {
       setDefItem(ITEMS[0]);
-      setDefAbility(abilities[0] || "なし");
-    } else {
-      setDefAbility(abilities[0] || "なし");
+    }
+    setDefAbility(initialAbility);
+
+    // ✅ 追加：防御側が「いかく」を持って場に出たなら、攻撃側のランクを下げる
+    if (initialAbility === "いかく") {
+      setAtkRank((prev) => Math.max(-6, prev - 1));
     }
   };
 
@@ -581,6 +633,28 @@ export default function Home() {
   };
   // 計算結果を変数に格納（nullの可能性もあるので注意）
   const res = calculateResult();
+  // ✅ 攻撃側と防御側をそっくり入れ替える関数
+  const handleSwap = () => {
+    // 1. ポケモン本体・持ち物・特性を入れ替え
+    setAttacker(defender);
+    setDefender(attacker);
+    setAtkItem(defItem);
+    setDefItem(atkItem);
+    setAtkAbility(defAbility);
+    setDefAbility(atkAbility);
+
+    // 2. ランクのリセットと「いかく」の自動発動
+    // 新しい防御側（元の atkAbility）が「いかく」なら、新しい攻撃側のランクを -1
+    if (atkAbility === "いかく") {
+      setAtkRank(-1);
+    } else {
+      setAtkRank(0); // いかく以外なら 0 にリセット
+    }
+    setDefRank(0); // 防御側のランクは常にリセット
+
+    // やけど状態はリセット
+    setIsAtkBurned(false);
+  };
 
   return (
     <main
@@ -601,6 +675,7 @@ export default function Home() {
           gap: "20px",
           justifyContent: "center",
           flexWrap: "wrap",
+          alignItems: "center", // ✅ 追加：ボタンを縦の真ん中に配置するため
         }}
       >
         {/* 攻撃側設定 */}
@@ -706,14 +781,44 @@ export default function Home() {
                   }}
                 />
               </div>
-              {/* 数値入力欄も残す */}
-              <div style={{ textAlign: "left" }}>
-                <input
-                  type="number"
-                  value={atkEv}
-                  onChange={(e) => setAtkEv(Number(e.target.value))}
-                  style={{ width: "60px", color: "black" }}
-                />
+              {/* 数値入力欄とクイックボタン */}
+              <div
+                style={{
+                  textAlign: "left",
+                  display: "flex",
+                  gap: "8px",
+                  alignItems: "center",
+                }}
+              >
+                <WheelNumberInput value={atkEv} onChange={setAtkEv} />
+                <button
+                  onClick={() => setAtkEv(0)}
+                  style={{
+                    fontSize: "0.7rem",
+                    padding: "2px 6px",
+                    borderRadius: "4px",
+                    border: "1px solid #ccc",
+                    backgroundColor: "#fff",
+                    cursor: "pointer",
+                    color: "#333",
+                  }}
+                >
+                  0
+                </button>
+                <button
+                  onClick={() => setAtkEv(32)}
+                  style={{
+                    fontSize: "0.7rem",
+                    padding: "2px 6px",
+                    borderRadius: "4px",
+                    border: "1px solid #ccc",
+                    backgroundColor: "#fff",
+                    cursor: "pointer",
+                    color: "#333",
+                  }}
+                >
+                  32
+                </button>
               </div>
               {/* 実数値 */}
               {(() => {
@@ -1135,6 +1240,42 @@ export default function Home() {
           )}
         </section>
 
+        {/* ✅ 追加：ここに入れ替えボタンを配置！ */}
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <button
+            onClick={handleSwap}
+            title="攻撃と防御を入れ替える"
+            style={{
+              backgroundColor: "#fff",
+              border: "2px solid #ddd",
+              borderRadius: "50%",
+              width: "50px",
+              height: "50px",
+              fontSize: "1.5rem",
+              fontWeight: "bold",
+              color: "#666",
+              cursor: "pointer",
+              boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transition: "all 0.2s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = "scale(1.1)";
+              e.currentTarget.style.borderColor = "#999";
+              e.currentTarget.style.color = "#333";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "scale(1)";
+              e.currentTarget.style.borderColor = "#ddd";
+              e.currentTarget.style.color = "#666";
+            }}
+          >
+            ⇄
+          </button>
+        </div>
+
         {/* 防御側設定 */}
         <section
           style={{
@@ -1240,14 +1381,44 @@ export default function Home() {
                   }}
                 />
               </div>
-              {/* 数値入力欄も残す */}
-              <div style={{ textAlign: "left" }}>
-                <input
-                  type="number"
-                  value={defHpEv}
-                  onChange={(e) => setDefHpEv(Number(e.target.value))}
-                  style={{ width: "60px", color: "black" }}
-                />
+              {/* 数値入力欄とクイックボタン */}
+              <div
+                style={{
+                  textAlign: "left",
+                  display: "flex",
+                  gap: "8px",
+                  alignItems: "center",
+                }}
+              >
+                <WheelNumberInput value={defHpEv} onChange={setDefHpEv} />
+                <button
+                  onClick={() => setDefHpEv(0)}
+                  style={{
+                    fontSize: "0.7rem",
+                    padding: "2px 6px",
+                    borderRadius: "4px",
+                    border: "1px solid #ccc",
+                    backgroundColor: "#fff",
+                    cursor: "pointer",
+                    color: "#333",
+                  }}
+                >
+                  0
+                </button>
+                <button
+                  onClick={() => setDefHpEv(32)}
+                  style={{
+                    fontSize: "0.7rem",
+                    padding: "2px 6px",
+                    borderRadius: "4px",
+                    border: "1px solid #ccc",
+                    backgroundColor: "#fff",
+                    cursor: "pointer",
+                    color: "#333",
+                  }}
+                >
+                  32
+                </button>
               </div>
               {/* HPの実数値表示 */}
               <div
@@ -1308,14 +1479,44 @@ export default function Home() {
                   }}
                 />
               </div>
-              {/* 数値入力欄も残す */}
-              <div style={{ textAlign: "left" }}>
-                <input
-                  type="number"
-                  value={defEv}
-                  onChange={(e) => setDefEv(Number(e.target.value))}
-                  style={{ width: "60px", color: "black" }}
-                />
+              {/* 数値入力欄とクイックボタン */}
+              <div
+                style={{
+                  textAlign: "left",
+                  display: "flex",
+                  gap: "8px",
+                  alignItems: "center",
+                }}
+              >
+                <WheelNumberInput value={defEv} onChange={setDefEv} />
+                <button
+                  onClick={() => setDefEv(0)}
+                  style={{
+                    fontSize: "0.7rem",
+                    padding: "2px 6px",
+                    borderRadius: "4px",
+                    border: "1px solid #ccc",
+                    backgroundColor: "#fff",
+                    cursor: "pointer",
+                    color: "#333",
+                  }}
+                >
+                  0
+                </button>
+                <button
+                  onClick={() => setDefEv(32)}
+                  style={{
+                    fontSize: "0.7rem",
+                    padding: "2px 6px",
+                    borderRadius: "4px",
+                    border: "1px solid #ccc",
+                    backgroundColor: "#fff",
+                    cursor: "pointer",
+                    color: "#333",
+                  }}
+                >
+                  32
+                </button>
               </div>
               {/* 防御/特防の切り替え表示 */}
               {(() => {
@@ -1390,7 +1591,6 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* 防御側の持ち物と特性の選択エリア */}
               {/* 防御側の持ち物と特性の選択エリア */}
               <div
                 style={{
