@@ -17,7 +17,10 @@ interface Pokemon {
   speed: number;
   type1: string;
   type2?: string;
-  ability?: string; // 特性
+  ability1: string;
+  ability2?: string | null;
+  hiddenAbility?: string | null;
+  weight?: number; // 体重依存技（くさむすび等）のために一応持っておく
 }
 
 // 技の型定義
@@ -280,6 +283,7 @@ const ITEMS: Item[] = [
   { name: "たつじんのおび", multiplier: 1.3, type: "dmg" },
   { name: "とつげきチョッキ", multiplier: 1.5, type: "spd" },
   { name: "オボンの実", multiplier: 0.25, type: "heal" }, // HPバー連動用
+  { name: "メガストーン", multiplier: 1, type: "none" }, // 表示用
 ];
 // 計算に影響する特性リスト（代表的なもの）
 const RELEVANT_ABILITIES = [
@@ -357,6 +361,21 @@ const TypeBadge = ({ type }: { type: string }) => {
   );
 };
 
+// メガシンカ判定
+const isMega = (name: string | undefined): boolean => {
+  if (!name) return false;
+  return (
+    name.startsWith("メガ") && !["メガニウム", "メガヤンマ"].includes(name)
+  );
+};
+
+// ✅ ポケモンの3つの特性カラムを、1つの配列にまとめる便利関数
+const getAbilitiesArray = (p: Pokemon | null): string[] => {
+  if (!p) return ["なし"];
+  // null や undefined を除外して配列化する（例：["さめはだ", "すながくれ"]）
+  return [p.ability1, p.ability2, p.hiddenAbility].filter(Boolean) as string[];
+};
+
 export default function Home() {
   const [attacker, setAttacker] = useState<Pokemon | null>(null);
   const [defender, setDefender] = useState<Pokemon | null>(null);
@@ -406,6 +425,32 @@ export default function Home() {
     return Math.floor(
       (Math.floor(((base * 2 + iv + evBonus) * level) / 100) + 5) * nature,
     );
+  };
+
+  // ✅ 攻撃側のポケモンを選んだ時の処理
+  const handleAttackerSelect = (p: Pokemon) => {
+    setAttacker(p);
+    const abilities = getAbilitiesArray(p);
+
+    if (isMega(p.name)) {
+      setAtkItem(ITEMS[0]); // 持ち物「なし」に強制
+      setAtkAbility(abilities[0] || "なし"); // メガ特性に固定
+    } else {
+      setAtkAbility(abilities[0] || "なし"); // 通常時は第一特性をセット
+    }
+  };
+
+  // ✅ 防御側のポケモンを選んだ時の処理
+  const handleDefenderSelect = (p: Pokemon) => {
+    setDefender(p);
+    const abilities = getAbilitiesArray(p);
+
+    if (isMega(p.name)) {
+      setDefItem(ITEMS[0]);
+      setDefAbility(abilities[0] || "なし");
+    } else {
+      setDefAbility(abilities[0] || "なし");
+    }
   };
 
   // --- ダメージ計算ロジック ---
@@ -571,7 +616,7 @@ export default function Home() {
           <h2 style={{ color: "#ff4d4d", borderBottom: "2px solid" }}>
             攻撃側
           </h2>
-          <PokemonSearch label="ポケモン" onSelect={setAttacker} />
+          <PokemonSearch label="ポケモン" onSelect={handleAttackerSelect} />
           {attacker && (
             <div style={{ marginTop: "15px", textAlign: "center" }}>
               <div
@@ -745,7 +790,8 @@ export default function Home() {
                   ))}
                 </div>
               </div>
-              {/* 持ち物と特性の選択エリア */}
+              {/* 攻撃側の持ち物と特性の選択エリア */}
+              {/* 攻撃側の持ち物と特性の選択エリア */}
               <div
                 style={{
                   display: "grid",
@@ -764,20 +810,22 @@ export default function Home() {
                       padding: "4px",
                       color: "black",
                       borderRadius: "4px",
+                      // ✅ メガシンカ時はグレーアウト
+                      backgroundColor: isMega(attacker?.name)
+                        ? "#e9e9e9"
+                        : "#fff",
+                      cursor: isMega(attacker?.name)
+                        ? "not-allowed"
+                        : "pointer",
                     }}
                     value={atkAbility}
-                    onChange={(e) => {
-                      setAtkAbility(e.target.value);
-                      // 「いかく」を選んだら防御側のランクを自動で下げる
-                      if (e.target.value === "いかく")
-                        setDefRank((prev) => Math.max(-6, prev - 1));
-                    }}
+                    onChange={(e) => setAtkAbility(e.target.value)}
+                    disabled={isMega(attacker?.name)} // ✅ メガシンカ時は操作不能
                   >
-                    <option value="なし">なし</option>
-                    {/* 実際は attacker.abilities.map(...) で回すと「本物」っぽくなります */}
-                    {RELEVANT_ABILITIES.map((ab) => (
-                      <option key={ab.name} value={ab.name}>
-                        {ab.name}
+                    {/* ✅ そのポケモンが持つ特性の配列を展開して選択肢にする */}
+                    {getAbilitiesArray(attacker).map((ab) => (
+                      <option key={ab} value={ab}>
+                        {ab}
                       </option>
                     ))}
                   </select>
@@ -793,17 +841,34 @@ export default function Home() {
                       padding: "4px",
                       color: "black",
                       borderRadius: "4px",
+                      // ✅ メガシンカ時はグレーアウト
+                      backgroundColor: isMega(attacker?.name)
+                        ? "#e9e9e9"
+                        : "#fff",
+                      cursor: isMega(attacker?.name)
+                        ? "not-allowed"
+                        : "pointer",
                     }}
                     value={atkItem.name}
                     onChange={(e) =>
-                      setAtkItem(ITEMS.find((i) => i.name === e.target.value))
+                      setAtkItem(
+                        ITEMS.find((i) => i.name === e.target.value) ||
+                          ITEMS[0],
+                      )
                     }
+                    disabled={isMega(attacker?.name)} // ✅ メガシンカ時は操作不能
                   >
-                    {ITEMS.map((item) => (
-                      <option key={item.name} value={item.name}>
-                        {item.name}
-                      </option>
-                    ))}
+                    {isMega(attacker?.name) ? (
+                      // ✅ メガシンカ専用の選択肢
+                      <option value="なし">メガストーン固定</option>
+                    ) : (
+                      // 通常の持ち物リスト
+                      ITEMS.map((item) => (
+                        <option key={item.name} value={item.name}>
+                          {item.name}
+                        </option>
+                      ))
+                    )}
                   </select>
                 </div>
               </div>
@@ -1083,7 +1148,7 @@ export default function Home() {
           <h2 style={{ color: "#4d79ff", borderBottom: "2px solid" }}>
             防御側
           </h2>
-          <PokemonSearch label="ポケモン" onSelect={setDefender} />
+          <PokemonSearch label="ポケモン" onSelect={handleDefenderSelect} />
           {defender && (
             <div style={{ marginTop: "15px", textAlign: "center" }}>
               {/* 防御側の画像表示 */}
@@ -1326,6 +1391,7 @@ export default function Home() {
               </div>
 
               {/* 防御側の持ち物と特性の選択エリア */}
+              {/* 防御側の持ち物と特性の選択エリア */}
               <div
                 style={{
                   display: "grid",
@@ -1344,20 +1410,25 @@ export default function Home() {
                       padding: "4px",
                       color: "black",
                       borderRadius: "4px",
+                      backgroundColor: isMega(defender?.name)
+                        ? "#e9e9e9"
+                        : "#fff",
+                      cursor: isMega(defender?.name)
+                        ? "not-allowed"
+                        : "pointer",
                     }}
                     value={defAbility}
                     onChange={(e) => {
                       setDefAbility(e.target.value);
-                      // 防御側が「いかく」なら、攻撃側（atkRank）を下げる！
                       if (e.target.value === "いかく") {
                         setAtkRank((prev) => Math.max(-6, prev - 1));
                       }
                     }}
+                    disabled={isMega(defender?.name)}
                   >
-                    <option value="なし">なし</option>
-                    {RELEVANT_ABILITIES.map((ab) => (
-                      <option key={ab.name} value={ab.name}>
-                        {ab.name}
+                    {getAbilitiesArray(defender).map((ab) => (
+                      <option key={ab} value={ab}>
+                        {ab}
                       </option>
                     ))}
                   </select>
@@ -1373,6 +1444,12 @@ export default function Home() {
                       padding: "4px",
                       color: "black",
                       borderRadius: "4px",
+                      backgroundColor: isMega(defender?.name)
+                        ? "#e9e9e9"
+                        : "#fff",
+                      cursor: isMega(defender?.name)
+                        ? "not-allowed"
+                        : "pointer",
                     }}
                     value={defItem.name}
                     onChange={(e) =>
@@ -1381,16 +1458,20 @@ export default function Home() {
                           ITEMS[0],
                       )
                     }
+                    disabled={isMega(defender?.name)}
                   >
-                    {ITEMS.map((item) => (
-                      <option key={item.name} value={item.name}>
-                        {item.name}
-                      </option>
-                    ))}
+                    {isMega(defender?.name) ? (
+                      <option value="なし">メガストーン固定</option>
+                    ) : (
+                      ITEMS.map((item) => (
+                        <option key={item.name} value={item.name}>
+                          {item.name}
+                        </option>
+                      ))
+                    )}
                   </select>
                 </div>
               </div>
-
               {/* 防御側のランク補正 */}
               <div
                 style={{
