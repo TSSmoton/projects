@@ -16,7 +16,8 @@ interface Pokemon {
   spDefense: number;
   speed: number;
   type1: string;
-  type2?: string; // ? は「無いこともある」という意味
+  type2?: string;
+  ability?: string; // 特性
 }
 
 // 技の型定義
@@ -26,6 +27,12 @@ interface Move {
   type: string;
   category: "物理" | "特殊" | "変化"; // 決まった文字列のみ許可
   power: number;
+}
+
+interface Item {
+  name: string;
+  multiplier: number;
+  type: "atk" | "dmg" | "speed" | "spa" | "spd" | "none" | "heal"; // 攻撃力にかかるか、最終ダメージにかかるか
 }
 
 // タイプ相性表
@@ -262,6 +269,45 @@ const DamageBar = ({
   );
 };
 
+// 持ち物の選択肢と倍率
+const ITEMS: Item[] = [
+  { name: "なし", multiplier: 1.0, type: "none" },
+  { name: "命の珠", multiplier: 1.3, type: "dmg" },
+  { name: "こだわりハチマキ", multiplier: 1.5, type: "atk" },
+  { name: "こだわりメガネ", multiplier: 1.5, type: "spa" },
+  { name: "ちからのハチマキ", multiplier: 1.1, type: "dmg" },
+  { name: "タイプ強化アイテム", multiplier: 1.2, type: "dmg" },
+  { name: "たつじんのおび", multiplier: 1.3, type: "dmg" },
+  { name: "とつげきチョッキ", multiplier: 1.5, type: "spd" },
+  { name: "オボンの実", multiplier: 0.25, type: "heal" }, // HPバー連動用
+];
+// 計算に影響する特性リスト（代表的なもの）
+const RELEVANT_ABILITIES = [
+  // { name: "なし", multiplier: 1.0 },
+  { name: "てきおうりょく", multiplier: 2.0 }, // タイプ一致が2倍に(技側で計算)
+  { name: "ちからもち", multiplier: 2.0 }, // 攻撃2倍
+  { name: "かたいツメ", multiplier: 1.3 }, // 直接攻撃1.3倍
+  { name: "マルチスケイル", multiplier: 0.5 }, // ダメージ半減
+  { name: "いかく", multiplier: 1.0 },
+];
+
+// ランク補正の倍率表（-6〜+6）
+const RANK_MODIFIERS: Record<number, number> = {
+  "-6": 2 / 8,
+  "-5": 2 / 7,
+  "-4": 2 / 6,
+  "-3": 2 / 5,
+  "-2": 2 / 4,
+  "-1": 2 / 3,
+  "0": 1.0,
+  "1": 1.5,
+  "2": 2.0,
+  "3": 2.5,
+  "4": 3.0,
+  "5": 3.5,
+  "6": 4.0,
+};
+
 export default function Home() {
   const [attacker, setAttacker] = useState<Pokemon | null>(null);
   const [defender, setDefender] = useState<Pokemon | null>(null);
@@ -274,7 +320,17 @@ export default function Home() {
   const [defHpEv, setDefHpEv] = useState(32); // 防御側HP：最大(32)で初期化
   const [defEv, setDefEv] = useState(0); // 防御側耐久：0で初期化
   const [defNature, setDefNature] = useState(1.0);
+  // 持ち物のState（初期値は「なし」）
+  const [atkItem, setAtkItem] = useState(ITEMS[0]);
+  const [defItem, setDefItem] = useState(ITEMS[0]);
 
+  // 特性のState（初期値は「なし」）
+  const [atkAbility, setAtkAbility] = useState("なし");
+  const [defAbility, setDefAbility] = useState("なし");
+
+  // ランク補正のState（-6 〜 +6）
+  const [atkRank, setAtkRank] = useState(0);
+  const [defRank, setDefRank] = useState(0);
   /**
    * 新システム対応：ステータス実数値計算
    * @param evLevel 0〜32の努力レベル
@@ -302,42 +358,96 @@ export default function Home() {
   };
 
   // --- ダメージ計算ロジック ---
+  // --- ダメージ計算ロジック ---
   const calculateResult = () => {
     if (!attacker || !defender || !selectedMove) return null;
 
-    const level = 50;
+    if (selectedMove.category === "変化") {
+      return {
+        min: 0,
+        max: 0,
+        hp: 100,
+        effectiveness: 0,
+        ohkoProb: 0,
+        isStatus: true,
+      };
+    }
+
     const isPhysical = selectedMove.category === "物理";
-
-    // 1. 攻撃側の能力値決定
-    const attackStat = isPhysical ? attacker.attack : attacker.spAttack;
-    const finalAtk = calcStat(attackStat, atkEv, atkNature);
-
-    // 2. 防御側の能力値決定
-    const defenseStat = isPhysical ? defender.defense : defender.spDefense;
-    const finalDef = calcStat(defenseStat, defEv, defNature);
     const finalHp = calcStat(defender.hp, defHpEv, 1.0, true);
+    const isFullHp = true;
 
-    const power = selectedMove.power || 0;
-    if (power === 0) return { isStatus: true };
+    // 選択された特性のデータを配列から取得（見つからなければ倍率1.0）
+    const atkAbil = RELEVANT_ABILITIES.find((a) => a.name === atkAbility) || {
+      name: "なし",
+      multiplier: 1.0,
+    };
+    const defAbil = RELEVANT_ABILITIES.find((a) => a.name === defAbility) || {
+      name: "なし",
+      multiplier: 1.0,
+    };
 
-    // 3. 基本ダメージ計算（補正前の最大ダメージを算出）
+    // 1. 攻撃力のステータス計算
+    let a = calcStat(
+      isPhysical ? attacker.attack : attacker.spAttack,
+      atkEv,
+      atkNature,
+    );
+    a = Math.floor(a * RANK_MODIFIERS[atkRank]);
+
+    // 定数の multiplier を使用（ちからもち等の攻撃ステータス補正）
+    if (atkAbility === "ちからもち" && isPhysical) {
+      a = Math.floor(a * atkAbil.multiplier);
+    }
+
+    if (atkItem.type === (isPhysical ? "atk" : "spa")) {
+      a = Math.floor(a * atkItem.multiplier);
+    }
+
+    // 2. 防御力のステータス計算
+    let d = calcStat(
+      isPhysical ? defender.defense : defender.spDefense,
+      defEv,
+      defNature,
+    );
+    d = Math.floor(d * RANK_MODIFIERS[defRank]);
+    if (defItem.type === (isPhysical ? "def" : "spd")) {
+      d = Math.floor(d * defItem.multiplier);
+    }
+
+    // 3. 基本ダメージ計算
     let baseDamage = Math.floor(
-      Math.floor(
-        (Math.floor((2 * level) / 5 + 2) * power * finalAtk) / finalDef,
-      ) /
+      Math.floor((Math.floor((2 * 50) / 5 + 2) * selectedMove.power * a) / d) /
         50 +
         2,
     );
 
-    // 4. タイプ一致補正 (1.5倍)
-    if (
+    // 4. 特性・持ち物による最終ダメージ倍率
+    // （※てきおうりょくはSTAB部分での特殊計算）
+    const stab =
       selectedMove.type === attacker.type1 ||
       selectedMove.type === attacker.type2
-    ) {
-      baseDamage = Math.floor(baseDamage * 1.5);
+        ? atkAbility === "てきおうりょく"
+          ? atkAbil.multiplier
+          : 1.5
+        : 1.0;
+    baseDamage = Math.floor(baseDamage * stab);
+
+    // （かたいツメのダメージ補正）
+    if (atkAbility === "かたいツメ" && isPhysical) {
+      baseDamage = Math.floor(baseDamage * atkAbil.multiplier);
     }
 
-    // 5. タイプ相性補正 (0倍〜4倍)
+    if (atkItem.type === "dmg") {
+      baseDamage = Math.floor(baseDamage * atkItem.multiplier);
+    }
+
+    // （マルチスケイルのダメージ軽減）
+    if (defAbility === "マルチスケイル" && isFullHp) {
+      baseDamage = Math.floor(baseDamage * defAbil.multiplier);
+    }
+
+    // 5. タイプ相性補正
     const type1Mod = TYPE_CHART[selectedMove.type]?.[defender.type1] ?? 1.0;
     const type2Mod = defender.type2
       ? (TYPE_CHART[selectedMove.type]?.[defender.type2] ?? 1.0)
@@ -345,28 +455,25 @@ export default function Home() {
     const effectiveness = type1Mod * type2Mod;
     baseDamage = Math.floor(baseDamage * effectiveness);
 
-    // --- ここから「乱数1発」の確率計算を追加 ---
-
-    // 85%から100%までの16段階のダメージ値を配列に格納
+    // --- 乱数計算 ---
     const damageList = [];
     for (let i = 85; i <= 100; i++) {
-      // 各パーセンテージを掛けて小数点以下切り捨て
       damageList.push(Math.floor((baseDamage * i) / 100));
     }
 
-    // 相手のHP以上のダメージがいくつあるかカウント
     const ohkoCount = damageList.filter((d) => d >= finalHp).length;
-    // 16個中の割合をパーセントに変換 (例: 8個なら 50.0%)
     const ohkoProb = (ohkoCount / 16) * 100;
 
     return {
-      min: damageList[0], // 最小(85%)
-      max: damageList[15], // 最大(100%)
-      hp: finalHp, // 相手のHP実数値
-      effectiveness, // 相性倍率
-      ohkoProb, // 倒せる確率(%)
+      min: damageList[0],
+      max: damageList[15],
+      hp: finalHp,
+      effectiveness,
+      ohkoProb,
+      isStatus: false,
     };
   };
+  // 計算結果を変数に格納（nullの可能性もあるので注意）
   const res = calculateResult();
 
   return (
@@ -508,6 +615,90 @@ export default function Home() {
                   </div>
                 );
               })()}{" "}
+              {/* 持ち物と特性の選択エリア */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "10px",
+                  marginTop: "15px",
+                }}
+              >
+                <div>
+                  <label style={{ fontSize: "0.7rem", display: "block" }}>
+                    特性
+                  </label>
+                  <select
+                    style={{
+                      width: "100%",
+                      padding: "4px",
+                      color: "black",
+                      borderRadius: "4px",
+                    }}
+                    value={atkAbility}
+                    onChange={(e) => {
+                      setAtkAbility(e.target.value);
+                      // 「いかく」を選んだら防御側のランクを自動で下げる
+                      if (e.target.value === "いかく")
+                        setDefRank((prev) => Math.max(-6, prev - 1));
+                    }}
+                  >
+                    <option value="なし">なし</option>
+                    {/* 実際は attacker.abilities.map(...) で回すと「本物」っぽくなります */}
+                    {RELEVANT_ABILITIES.map((ab) => (
+                      <option key={ab.name} value={ab.name}>
+                        {ab.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: "0.7rem", display: "block" }}>
+                    持ち物
+                  </label>
+                  <select
+                    style={{
+                      width: "100%",
+                      padding: "4px",
+                      color: "black",
+                      borderRadius: "4px",
+                    }}
+                    value={atkItem.name}
+                    onChange={(e) =>
+                      setAtkItem(ITEMS.find((i) => i.name === e.target.value))
+                    }
+                  >
+                    {ITEMS.map((item) => (
+                      <option key={item.name} value={item.name}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              {/* ランク補正（いかく連動用） */}
+              <div
+                style={{
+                  marginTop: "10px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                }}
+              >
+                <label style={{ fontSize: "0.7rem" }}>ランク</label>
+                <input
+                  type="number"
+                  min="-6"
+                  max="6"
+                  value={atkRank}
+                  onChange={(e) => setAtkRank(Number(e.target.value))}
+                  style={{ width: "45px", color: "black" }}
+                />
+                <span style={{ fontSize: "0.7rem", color: "#888" }}>
+                  ({RANK_MODIFIERS[atkRank]}x)
+                </span>
+              </div>
               {/* 性格補正 */}
               <div style={{ marginTop: "15px" }}>
                 <label
@@ -807,6 +998,96 @@ export default function Home() {
                   </div>
                 );
               })()}
+
+              {/* 防御側の持ち物と特性の選択エリア */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "10px",
+                  marginTop: "15px",
+                }}
+              >
+                <div>
+                  <label style={{ fontSize: "0.7rem", display: "block" }}>
+                    特性
+                  </label>
+                  <select
+                    style={{
+                      width: "100%",
+                      padding: "4px",
+                      color: "black",
+                      borderRadius: "4px",
+                    }}
+                    value={defAbility}
+                    onChange={(e) => {
+                      setDefAbility(e.target.value);
+                      // 防御側が「いかく」なら、攻撃側（atkRank）を下げる！
+                      if (e.target.value === "いかく") {
+                        setAtkRank((prev) => Math.max(-6, prev - 1));
+                      }
+                    }}
+                  >
+                    <option value="なし">なし</option>
+                    {RELEVANT_ABILITIES.map((ab) => (
+                      <option key={ab.name} value={ab.name}>
+                        {ab.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: "0.7rem", display: "block" }}>
+                    持ち物
+                  </label>
+                  <select
+                    style={{
+                      width: "100%",
+                      padding: "4px",
+                      color: "black",
+                      borderRadius: "4px",
+                    }}
+                    value={defItem.name}
+                    onChange={(e) =>
+                      setDefItem(
+                        ITEMS.find((i) => i.name === e.target.value) ||
+                          ITEMS[0],
+                      )
+                    }
+                  >
+                    {ITEMS.map((item) => (
+                      <option key={item.name} value={item.name}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* 防御側のランク補正 */}
+              <div
+                style={{
+                  marginTop: "10px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                }}
+              >
+                <label style={{ fontSize: "0.7rem" }}>ランク</label>
+                <input
+                  type="number"
+                  min="-6"
+                  max="6"
+                  value={defRank}
+                  onChange={(e) => setDefRank(Number(e.target.value))}
+                  style={{ width: "45px", color: "black" }}
+                />
+                <span style={{ fontSize: "0.7rem", color: "#888" }}>
+                  ({RANK_MODIFIERS[defRank]}x)
+                </span>
+              </div>
+
               <div style={{ marginTop: "15px" }}>
                 <label
                   style={{
