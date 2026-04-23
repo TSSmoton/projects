@@ -5,7 +5,30 @@ import PokemonSearch from "../src/components/PokemonSearch";
 import MoveSearch from "../src/components/MoveSearch";
 import Image from "next/image";
 
-// タイプ相性表（前回のものを使用）
+// ポケモンの型定義
+interface Pokemon {
+  id: number;
+  name: string;
+  hp: number;
+  attack: number;
+  defense: number;
+  spAttack: number;
+  spDefense: number;
+  speed: number;
+  type1: string;
+  type2?: string; // ? は「無いこともある」という意味
+}
+
+// 技の型定義
+interface Move {
+  id: number;
+  name: string;
+  type: string;
+  category: "物理" | "特殊" | "変化"; // 決まった文字列のみ許可
+  power: number;
+}
+
+// タイプ相性表
 const TYPE_CHART: Record<string, Record<string, number>> = {
   ノーマル: { いわ: 0.5, ゴースト: 0, はがね: 0.5 },
   ほのお: {
@@ -133,7 +156,7 @@ const TYPE_CHART: Record<string, Record<string, number>> = {
   },
 };
 //ステータス一覧コンポーネント
-const BaseStatsSummary = ({ pokemon }: { pokemon: any }) => (
+const BaseStatsSummary = ({ pokemon }: { pokemon: Pokemon }) => (
   <div
     style={{
       display: "grid",
@@ -154,10 +177,95 @@ const BaseStatsSummary = ({ pokemon }: { pokemon: any }) => (
     <div style={{ textAlign: "center" }}>すばやさ: {pokemon.speed}</div>
   </div>
 );
+// ダメージバーコンポーネント
+const DamageBar = ({
+  hp,
+  minDam,
+  maxDam,
+}: {
+  hp: number;
+  minDam: number;
+  maxDam: number;
+}) => {
+  // パーセント計算
+  const minPercent = Math.min(100, (minDam / hp) * 100);
+  const maxPercent = Math.min(100, (maxDam / hp) * 100);
+  const remainingPercent = Math.max(0, 100 - maxPercent);
+
+  return (
+    <div style={{ marginTop: "15px", marginBottom: "20px" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          fontSize: "0.8rem",
+          marginBottom: "4px",
+          color: "#666",
+        }}
+      >
+        <span>HPバー</span>
+        <span>
+          {Math.max(0, hp - maxDam)} / {hp}
+        </span>
+      </div>
+      {/* バー本体 */}
+      <div
+        style={{
+          height: "14px",
+          width: "100%",
+          backgroundColor: "#e0e0e0", // 背景（空の部分）
+          borderRadius: "7px",
+          overflow: "hidden",
+          position: "relative",
+          boxShadow: "inset 0 1px 3px rgba(0,0,0,0.2)",
+        }}
+      >
+        {/* 残りHP（緑） */}
+        <div
+          style={{
+            width: `${remainingPercent}%`,
+            height: "100%",
+            backgroundColor:
+              remainingPercent > 50
+                ? "#4ade80"
+                : remainingPercent > 20
+                  ? "#fbbf24"
+                  : "#ef4444",
+            transition: "width 0.3s ease-out",
+          }}
+        />
+        {/* ダメージの振れ幅（赤〜オレンジのグラデーション） */}
+        <div
+          style={{
+            position: "absolute",
+            left: `${remainingPercent}%`,
+            top: 0,
+            width: `${maxPercent - minPercent}%`,
+            height: "100%",
+            backgroundColor: "#f97316", // オレンジ
+            opacity: 0.8,
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            left: `${remainingPercent + (maxPercent - minPercent)}%`,
+            top: 0,
+            width: `${minPercent}%`,
+            height: "100%",
+            backgroundColor: "#555555", // 赤
+            opacity: 0.8,
+          }}
+        />
+      </div>
+    </div>
+  );
+};
+
 export default function Home() {
-  const [attacker, setAttacker] = useState<any>(null);
-  const [defender, setDefender] = useState<any>(null);
-  const [selectedMove, setSelectedMove] = useState<any>(null);
+  const [attacker, setAttacker] = useState<Pokemon | null>(null);
+  const [defender, setDefender] = useState<Pokemon | null>(null);
+  const [selectedMove, setSelectedMove] = useState<Move | null>(null);
 
   // --- Homeコンポーネント内：努力値の管理を 0〜32 の範囲に変更 ---
   const [atkEv, setAtkEv] = useState(32); // 攻撃側：最大(32)で初期化
@@ -319,43 +427,6 @@ export default function Home() {
                 // 画像がない場合のエラー対策
                 style={{ objectFit: "contain" }}
               />
-              {/* 技の分類によって A か C かを判断
-              {(() => {
-                const isPhysical = selectedMove?.category === "物理";
-                const label = isPhysical ? "こうげき" : "とくこう";
-                const baseStat = isPhysical
-                  ? attacker.attack
-                  : attacker.spAttack;
-                // 実数値を計算
-                const actualStat = calcStat(baseStat, atkEv, atkNature);
-
-                return (
-                  <div
-                    style={{
-                      padding: "10px",
-                      backgroundColor: "#f9f9f9",
-                      borderRadius: "5px",
-                      marginBottom: "10px",
-                    }}
-                  >
-                    <p style={{ margin: 0, fontWeight: "bold" }}>
-                      使用ステータス: {label}
-                    </p>
-                    <p style={{ margin: "5px 0", fontSize: "0.9rem" }}>
-                      種族値: {baseStat} →{" "}
-                      <span
-                        style={{
-                          color: "#af2101",
-                          fontSize: "1.1rem",
-                          fontWeight: "bold",
-                        }}
-                      >
-                        実数値: {actualStat}
-                      </span>
-                    </p>
-                  </div>
-                );
-              })()}{" "} */}
               {/* 全種族値を表示（物理・特殊どちらも確認可能） */}
               <p
                 style={{
@@ -367,35 +438,6 @@ export default function Home() {
                 種族値
               </p>
               <BaseStatsSummary pokemon={attacker} />
-              {(() => {
-                const isPhysical = selectedMove?.category === "物理";
-                const label = isPhysical ? "こうげき" : "とくこう";
-                const baseStat = isPhysical
-                  ? attacker.attack
-                  : attacker.spAttack;
-                const actualStat = calcStat(baseStat, atkEv, atkNature);
-
-                return (
-                  <div
-                    style={{
-                      padding: "10px",
-                      backgroundColor: "#f9f9f9",
-                      borderRadius: "5px",
-                      marginBottom: "10px",
-                    }}
-                  >
-                    <p style={{ margin: 0, fontWeight: "bold" }}>
-                      使用ステータス: {label}
-                    </p>
-                    <p style={{ margin: "5px 0", fontSize: "0.9rem" }}>
-                      種族値: {baseStat} →{" "}
-                      <span style={{ color: "#af2101", fontWeight: "bold" }}>
-                        実数値: {actualStat}
-                      </span>
-                    </p>
-                  </div>
-                );
-              })()}
               {/* 努力値とスライダー */}
               <div style={{ marginTop: "15px" }}>
                 {/* ラベルと数値の表示 */}
@@ -436,6 +478,36 @@ export default function Home() {
                   style={{ width: "60px", color: "black" }}
                 />
               </div>
+              {/* 実数値 */}
+              {(() => {
+                const isPhysical = selectedMove?.category === "物理";
+                const label = isPhysical ? "こうげき" : "とくこう";
+                const baseStat = isPhysical
+                  ? attacker.attack
+                  : attacker.spAttack;
+                const actualStat = calcStat(baseStat, atkEv, atkNature);
+
+                return (
+                  <div
+                    style={{
+                      padding: "10px",
+                      backgroundColor: "#f9f9f9",
+                      borderRadius: "5px",
+                      marginBottom: "10px",
+                    }}
+                  >
+                    <p style={{ margin: 0, fontWeight: "bold" }}>
+                      使用ステータス: {label}
+                    </p>
+                    <p style={{ margin: "5px 0", fontSize: "0.9rem" }}>
+                      種族値: {baseStat} →{" "}
+                      <span style={{ color: "#af2101", fontWeight: "bold" }}>
+                        実数値: {actualStat}
+                      </span>
+                    </p>
+                  </div>
+                );
+              })()}{" "}
               {/* 性格補正 */}
               <div style={{ marginTop: "15px" }}>
                 <label
@@ -546,7 +618,6 @@ export default function Home() {
                     </div>
                   </div>
                 )}
-                {/* --- ここまで追加 --- */}
               </div>
             </div>
           )}
@@ -586,24 +657,18 @@ export default function Home() {
                 height={100}
                 style={{ objectFit: "contain" }}
               />
-              {/* HPの実数値表示 */}
-              <BaseStatsSummary pokemon={defender} />{" "}
-              <div
+              {/* 種族値 */}
+              <p
                 style={{
-                  padding: "8px",
-                  backgroundColor: "#f0f5ff",
-                  borderRadius: "5px",
-                  marginBottom: "10px",
+                  fontSize: "0.8rem",
+                  marginBottom: "5px",
+                  fontWeight: "bold",
                 }}
               >
-                <p style={{ margin: 0, fontWeight: "bold" }}>HP</p>
-                <p style={{ margin: "2px 0", fontSize: "0.9rem" }}>
-                  種族値: {defender.hp} →{" "}
-                  <span style={{ fontWeight: "bold" }}>
-                    実数値: {calcStat(defender.hp, defHpEv, 1.0, true)}
-                  </span>
-                </p>
-              </div>
+                種族値
+              </p>
+              <BaseStatsSummary pokemon={defender} />
+
               <label style={{ display: "block", fontSize: "0.9rem" }}>
                 HP 努力値
               </label>
@@ -646,39 +711,31 @@ export default function Home() {
                   style={{ width: "60px", color: "black" }}
                 />
               </div>
-              {/* 防御/特防の切り替え表示 */}
-              {(() => {
-                const isPhysical = selectedMove?.category === "物理";
-                const label = isPhysical ? "ぼうぎょ" : "とくぼう";
-                const baseStat = isPhysical
-                  ? defender.defense
-                  : defender.spDefense;
-                const actualStat = calcStat(baseStat, defEv, defNature);
+              {/* HPの実数値表示 */}
+              <div
+                style={{
+                  padding: "8px",
+                  backgroundColor: "#f0f5ff",
+                  borderRadius: "5px",
+                  marginBottom: "10px",
+                }}
+              >
+                <p style={{ margin: 0, fontWeight: "bold" }}>HP</p>
+                <p style={{ margin: "2px 0", fontSize: "0.9rem" }}>
+                  種族値: {defender.hp} →{" "}
+                  <span style={{ fontWeight: "bold" }}>
+                    実数値: {calcStat(defender.hp, defHpEv, 1.0, true)}
+                  </span>
+                </p>
+              </div>
 
-                return (
-                  <div
-                    style={{
-                      marginTop: "15px",
-                      padding: "8px",
-                      backgroundColor: "#f0f5ff",
-                      borderRadius: "5px",
-                    }}
-                  >
-                    <p style={{ margin: 0, fontWeight: "bold" }}>{label}</p>
-                    <p style={{ margin: "2px 0", fontSize: "0.9rem" }}>
-                      種族値: {baseStat} →{" "}
-                      <span style={{ fontWeight: "bold" }}>
-                        実数値: {actualStat}
-                      </span>
-                    </p>
-                  </div>
-                );
-              })()}
               <label
                 style={{
                   display: "block",
                   fontSize: "0.9rem",
-                  marginTop: "10px",
+                  paddingTop: "15px",
+                  marginTop: "20px",
+                  borderTop: "1px solid #ccc",
                 }}
               >
                 防御側の耐久努力値
@@ -722,6 +779,34 @@ export default function Home() {
                   style={{ width: "60px", color: "black" }}
                 />
               </div>
+              {/* 防御/特防の切り替え表示 */}
+              {(() => {
+                const isPhysical = selectedMove?.category === "物理";
+                const label = isPhysical ? "ぼうぎょ" : "とくぼう";
+                const baseStat = isPhysical
+                  ? defender.defense
+                  : defender.spDefense;
+                const actualStat = calcStat(baseStat, defEv, defNature);
+
+                return (
+                  <div
+                    style={{
+                      marginTop: "15px",
+                      padding: "8px",
+                      backgroundColor: "#f0f5ff",
+                      borderRadius: "5px",
+                    }}
+                  >
+                    <p style={{ margin: 0, fontWeight: "bold" }}>{label}</p>
+                    <p style={{ margin: "2px 0", fontSize: "0.9rem" }}>
+                      種族値: {baseStat} →{" "}
+                      <span style={{ fontWeight: "bold" }}>
+                        実数値: {actualStat}
+                      </span>
+                    </p>
+                  </div>
+                );
+              })()}
               <div style={{ marginTop: "15px" }}>
                 <label
                   style={{
@@ -772,104 +857,136 @@ export default function Home() {
       </div>
 
       {/* 計算結果表示エリア */}
-      <div style={{ marginTop: "20px", textAlign: "center" }}>
+      <div
+        style={{
+          marginTop: "20px",
+          display: "flex",
+          justifyContent: "center",
+        }}
+      >
         <div
           style={{
-            display: "inline-block",
-            padding: "10px",
-            backgroundColor: "#061218ea",
-            color: "white",
+            padding: "30px",
+            backgroundColor: "#ffffff", // 白ベースに変更
+            color: "#333",
             borderRadius: "20px",
-            minWidth: "400px",
+            width: "100%",
+            maxWidth: "600px",
+            boxShadow: "0 10px 25px rgba(0,0,0,0.1)", // ふんわりした影
+            border: "1px solid #eaeaea",
           }}
         >
           {!res ? (
-            <p>ポケモンと技を選択してください</p>
+            <p style={{ textAlign: "center", color: "#999" }}>
+              ポケモンと技を選択してダメージを測定
+            </p>
           ) : res.isStatus ? (
-            <h2>変化技（ダメージなし）</h2>
+            <h2 style={{ textAlign: "center", color: "#888" }}>
+              変化技（ダメージなし）
+            </h2>
           ) : (
             <>
-              <p style={{ color: "#aaa" }}>ダメージ範囲</p>
-              <h2
-                style={{
-                  fontSize: "1.5rem",
-                  color: "#d1d406",
-                  margin: "10px 0",
-                }}
-              >
-                {res.effectiveness === 0
-                  ? "0"
-                  : `${Math.max(1, res.min)} 〜 ${Math.max(1, res.max)}`}
-              </h2>
-
-              {/* HPに対する割合と確定数の表示 */}
-              {res.effectiveness > 0 && (
-                <div
+              {/* 状態表示ラベル */}
+              <div style={{ textAlign: "center", marginBottom: "15px" }}>
+                <span
                   style={{
-                    fontSize: "1.2rem",
-                    borderTop: "1px solid #444",
-                    paddingTop: "5px",
+                    padding: "4px 12px",
+                    borderRadius: "20px",
+                    fontSize: "0.8rem",
+                    fontWeight: "bold",
+                    backgroundColor:
+                      res.ohkoProb === 100
+                        ? "#fee2e2"
+                        : res.ohkoProb > 0
+                          ? "#fef3c7"
+                          : "#dcfce7",
+                    color:
+                      res.ohkoProb === 100
+                        ? "#ef4444"
+                        : res.ohkoProb > 0
+                          ? "#d97706"
+                          : "#16a34a",
                   }}
                 >
-                  <p>相手のHP実数値: {res.hp}</p>
-                  <p
-                    style={{ color: res.min >= res.hp ? "#ff4d4d" : "#4ade80" }}
-                  >
-                    割合: {((res.min / res.hp) * 100).toFixed(1)}% 〜{" "}
-                    {((res.max / res.hp) * 100).toFixed(1)}%
-                  </p>
+                  {res.ohkoProb === 100
+                    ? "High Damage"
+                    : res.ohkoProb > 0
+                      ? "Chance"
+                      : "Safe"}
+                </span>
+              </div>
 
-                  {/* --- 倒せる確率の表示を詳細化 --- */}
-                  <div
-                    style={{
-                      marginTop: "5px",
-                      fontSize: "1.5rem",
-                      fontWeight: "bold",
-                    }}
-                  >
-                    {res.ohkoProb === 100 ? (
-                      <span style={{ color: "#ff4d4d" }}>確定1発</span>
-                    ) : res.ohkoProb > 0 ? (
-                      <span style={{ color: "#ffed4a" }}>
-                        乱数1発 ({res.ohkoProb.toFixed(1)}%)
-                      </span>
-                    ) : (
-                      <span style={{ color: "#4ade80" }}>確定耐え</span>
-                    )}
-                  </div>
-                </div>
+              {/* メインダメージ数値 */}
+              <div style={{ textAlign: "center" }}>
+                <p
+                  style={{
+                    fontSize: "0.9rem",
+                    color: "#666",
+                    marginBottom: "0",
+                  }}
+                >
+                  ダメージ範囲
+                </p>
+                <h2
+                  style={{
+                    fontSize: "3rem",
+                    fontWeight: "900",
+                    margin: "5px 0",
+                    color: "#1a1a1a",
+                  }}
+                >
+                  {res.effectiveness === 0
+                    ? "0"
+                    : `${Math.max(1, res.min)} 〜 ${Math.max(1, res.max)}`}
+                </h2>
+                <p
+                  style={{
+                    fontSize: "1.1rem",
+                    fontWeight: "bold",
+                    color: "#666",
+                  }}
+                >
+                  （{((res.min / res.hp) * 100).toFixed(1)}% 〜{" "}
+                  {((res.max / res.hp) * 100).toFixed(1)}%）
+                </p>
+              </div>
+
+              {/* HPバー */}
+              {res.effectiveness > 0 && (
+                <DamageBar hp={res.hp} minDam={res.min} maxDam={res.max} />
               )}
 
-              <p
+              {/* 確定数メッセージ */}
+              <div
                 style={{
+                  textAlign: "center",
+                  padding: "15px",
+                  borderRadius: "12px",
+                  backgroundColor: "#f8fafc",
                   marginTop: "10px",
-                  fontWeight: "bold",
-                  color:
-                    res.effectiveness >= 4
-                      ? "#ff0000"
-                      : res.effectiveness >= 2
-                        ? "#ff4d4d"
-                        : res.effectiveness === 0
-                          ? "#aaa"
-                          : res.effectiveness <= 0.25
-                            ? "#7a70ff"
-                            : res.effectiveness < 1
-                              ? "#49c3f3"
-                              : "white",
                 }}
               >
-                {res.effectiveness >= 4
-                  ? "効果は かなり ばつぐんだ！！"
-                  : res.effectiveness >= 2
-                    ? "効果は ばつぐんだ！"
-                    : res.effectiveness === 0
-                      ? "効果が ない ようだ…"
-                      : res.effectiveness <= 0.25
-                        ? "効果は かなり いまひとつのようだ…"
-                        : res.effectiveness < 1
-                          ? "効果は いまひとつのようだ…"
-                          : ""}
-              </p>
+                <div style={{ fontSize: "1.5rem", fontWeight: "bold" }}>
+                  {res.ohkoProb === 100 ? (
+                    <span style={{ color: "#ef4444" }}>確定1発</span>
+                  ) : res.ohkoProb > 0 ? (
+                    <span style={{ color: "#f59e0b" }}>
+                      乱数1発 ({res.ohkoProb.toFixed(1)}%)
+                    </span>
+                  ) : (
+                    <span style={{ color: "#10b981" }}>確定耐え</span>
+                  )}
+                </div>
+                <p
+                  style={{
+                    margin: "5px 0 0",
+                    fontSize: "0.9rem",
+                    color: "#888",
+                  }}
+                >
+                  相性倍率: {res.effectiveness}x
+                </p>
+              </div>
             </>
           )}
         </div>

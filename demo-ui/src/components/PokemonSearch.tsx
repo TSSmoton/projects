@@ -5,12 +5,12 @@ import { searchPokemon } from "../services/api";
 
 interface PokemonSearchProps {
   label: string;
-  onSelect: (pokemon: any) => void;
+  onSelect: (pokemon: Pokemon) => void;
 }
 
 export default function PokemonSearch({ label, onSelect }: PokemonSearchProps) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<any[]>([]);
+  const [results, setResults] = useState<Pokemon[]>([]);
 
   const handleInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -36,7 +36,7 @@ export default function PokemonSearch({ label, onSelect }: PokemonSearchProps) {
         onChange={handleInput}
         placeholder="名前で検索..."
         style={{
-          width: "100%",
+          width: "95%",
           padding: "8px",
           borderRadius: "4px",
           border: "1px solid #ccc",

@@ -5,10 +5,10 @@ import { searchMoves } from "../services/api";
 export default function MoveSearch({
   onSelect,
 }: {
-  onSelect: (move: any) => void;
+  onSelect: (move: Move) => void;
 }) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<any[]>([]);
+  const [results, setResults] = useState<Move[]>([]);
 
   const handleInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -30,7 +30,7 @@ export default function MoveSearch({
         onChange={handleInput}
         placeholder="１０まんボルト..."
         style={{
-          width: "100%",
+          width: "95%",
           padding: "8px",
           borderRadius: "4px",
           border: "1px solid #ccc",
@@ -54,23 +54,6 @@ export default function MoveSearch({
             color: "black",
           }}
         >
-          {/* {results.map((m) => (
-            <li
-              key={m.id}
-              onClick={() => {
-                onSelect(m);
-                setQuery(m.name);
-                setResults([]);
-              }}
-              style={{
-                padding: "8px",
-                cursor: "pointer",
-                borderBottom: "1px solid #eee",
-              }}
-            >
-              {m.name} ({m.type} / {m.category})
-            </li>
-          ))} */}
           {results.map((m) => (
             <li
               key={m.id}
