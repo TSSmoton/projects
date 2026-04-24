@@ -28,10 +28,7 @@ export default function PokemonSearch({
   const [results, setResults] = useState<Pokemon[]>([]);
   const [focusedIndex, setFocusedIndex] = useState(-1);
 
-  // 💥 ここが一番重要！ 💥
-  // 親コンポーネント（page.tsx）で「⇄」ボタンが押されて selectedPokemon が切り替わったら、
-  // この中身が自動的に走って、テキストボックスの文字を新しいポケモンの名前に書き換えます。
-// 💥 修正：同期的なState更新を避けるため、非同期関数でラップする
+  // 💥 修正：同期的なState更新を避けるため、非同期関数でラップする
   useEffect(() => {
     let isMounted = true;
 
@@ -48,6 +45,9 @@ export default function PokemonSearch({
       isMounted = false;
     };
   }, [selectedPokemon]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (results.length === 0) return;
 
     if (e.key === "ArrowDown") {
       e.preventDefault();
