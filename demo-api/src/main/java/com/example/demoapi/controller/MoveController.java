@@ -10,7 +10,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/move")
-@CrossOrigin(origins = "http://localhost:3000")
+@CrossOrigin(origins = {"http://localhost:3000", "https://projects-nine-azure.vercel.app"}) // ✅ フロントのURLを両方許可
 public class MoveController {
 
     @Autowired
