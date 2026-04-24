@@ -25,6 +25,16 @@ export default function MoveSearch({
   const [isOpen, setIsOpen] = useState(false); // ドロップダウンの開閉状態
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  // 「現在選択されているリストの項目」を記憶するための箱
+  const selectedItemRef = useRef<HTMLLIElement | null>(null);
+
+  // // selectedIndex が変わるたびに、その要素までスクロールする
+  // useEffect(() => {
+  //   if (selectedItemRef.current) {
+  //     // block: "nearest" にすると、画面外に出た時だけ最小限のスクロールをしてくれます
+  //     selectedItemRef.current.scrollIntoView({ block: "nearest" });
+  //   }
+  // }, [selectedIndex]);
 
   // ✅ ここがメイン！ポケモンが選ばれたら、DBから本物の技リストを取得する
   useEffect(() => {

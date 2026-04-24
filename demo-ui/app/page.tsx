@@ -522,9 +522,8 @@ export default function Home() {
 
     const isPhysical = selectedMove.category === "物理";
     const finalHp = calcStat(defender.hp, defHpEv, 1.0, true);
-    const isFullHp = true;
+    const isFullHp = true; // （※後々、現在のHPを参照するように変更してください）
 
-    // 選択された特性のデータを配列から取得（見つからなければ倍率1.0）
     const atkAbil = RELEVANT_ABILITIES.find((a) => a.name === atkAbility) || {
       name: "なし",
       multiplier: 1.0,
@@ -534,7 +533,29 @@ export default function Home() {
       multiplier: 1.0,
     };
 
-    // 1. 攻撃力のステータス計算
+    // =======================================
+    // 0. 技の「威力 (Power)」の計算（★修正ポイント2）
+    // =======================================
+    let currentPower = selectedMove.power;
+
+    // フェアリーオーラの処理
+    const hasFairyAura =
+      atkAbility === "フェアリーオーラ" || defAbility === "フェアリーオーラ";
+    const hasAuraBreak =
+      atkAbility === "オーラブレイク" || defAbility === "オーラブレイク";
+    if (hasFairyAura && selectedMove.type === "フェアリー") {
+      const auraMultiplier = hasAuraBreak ? 0.75 : 1.33;
+      currentPower = Math.floor(currentPower * auraMultiplier);
+    }
+
+    // かたいツメの処理（※できれば isPhysical ではなく、技データに isContact(接触技) を追加して判定するのが理想です）
+    if (atkAbility === "かたいツメ" && isPhysical) {
+      currentPower = Math.floor(currentPower * atkAbil.multiplier);
+    }
+
+    // =======================================
+    // 1. 攻撃力 (A) の計算
+    // =======================================
     let a = calcStat(
       isPhysical ? attacker.attack : attacker.spAttack,
       atkEv,
@@ -542,27 +563,23 @@ export default function Home() {
     );
     a = Math.floor(a * RANK_MODIFIERS[atkRank]);
 
-    // 定数の multiplier を使用（ちからもち等の攻撃ステータス補正）
     if (atkAbility === "ちからもち" && isPhysical) {
       a = Math.floor(a * atkAbil.multiplier);
     }
-
     if (atkItem.type === (isPhysical ? "atk" : "spa")) {
       a = Math.floor(a * atkItem.multiplier);
     }
-
     // やけど ＆ こんじょうの処理
     if (isAtkBurned && isPhysical) {
-      if (atkAbility === "こんじょう") {
-        // こんじょうなら攻撃1.5倍（やけどの半減は無視）
-        a = Math.floor(a * atkAbil.multiplier);
-      } else {
-        // それ以外なら攻撃0.5倍
-        a = Math.floor(a * 0.5);
-      }
+      a =
+        atkAbility === "こんじょう"
+          ? Math.floor(a * atkAbil.multiplier)
+          : Math.floor(a * 0.5);
     }
 
-    // 2. 防御力のステータス計算
+    // =======================================
+    // 2. 防御力 (D) の計算
+    // =======================================
     let d = calcStat(
       isPhysical ? defender.defense : defender.spDefense,
       defEv,
@@ -573,50 +590,52 @@ export default function Home() {
       d = Math.floor(d * defItem.multiplier);
     }
 
+    // =======================================
     // 3. 基本ダメージ計算
-    let baseDamage = Math.floor(
-      Math.floor((Math.floor((2 * 50) / 5 + 2) * selectedMove.power * a) / d) /
-        50 +
+    // =======================================
+    const baseDamage = Math.floor(
+      Math.floor((Math.floor((2 * 50) / 5 + 2) * currentPower * a) / d) / 50 +
         2,
     );
 
-    // 4. 特性・持ち物による最終ダメージ倍率
-    // （※てきおうりょくはSTAB部分での特殊計算）
-    const stab =
+    // =======================================
+    // 4. 乱数展開 ＆ 最終ダメージ補正（★修正ポイント3）
+    // =======================================
+    const stabMod =
       selectedMove.type === attacker.type1 ||
       selectedMove.type === attacker.type2
         ? atkAbility === "てきおうりょく"
           ? atkAbil.multiplier
           : 1.5
         : 1.0;
-    baseDamage = Math.floor(baseDamage * stab);
 
-    // （かたいツメのダメージ補正）
-    if (atkAbility === "かたいツメ" && isPhysical) {
-      baseDamage = Math.floor(baseDamage * atkAbil.multiplier);
-    }
-
-    if (atkItem.type === "dmg") {
-      baseDamage = Math.floor(baseDamage * atkItem.multiplier);
-    }
-
-    // （マルチスケイルのダメージ軽減）
-    if (defAbility === "マルチスケイル" && isFullHp) {
-      baseDamage = Math.floor(baseDamage * defAbil.multiplier);
-    }
-
-    // 5. タイプ相性補正
     const type1Mod = TYPE_CHART[selectedMove.type]?.[defender.type1] ?? 1.0;
     const type2Mod = defender.type2
       ? (TYPE_CHART[selectedMove.type]?.[defender.type2] ?? 1.0)
       : 1.0;
     const effectiveness = type1Mod * type2Mod;
-    baseDamage = Math.floor(baseDamage * effectiveness);
 
-    // --- 乱数計算 ---
     const damageList = [];
+
+    // 85〜100の乱数ごとに、切り捨てながら最終ダメージを計算する
     for (let i = 85; i <= 100; i++) {
-      damageList.push(Math.floor((baseDamage * i) / 100));
+      let dmg = Math.floor((baseDamage * i) / 100); // ① 乱数
+      dmg = Math.floor(dmg * stabMod); // ② タイプ一致
+      dmg = Math.floor(dmg * effectiveness); // ③ タイプ相性
+
+      // ④ 強化アイテム
+      if (atkItem.type === "dmg") {
+        dmg = Math.floor(dmg * atkItem.multiplier);
+      }
+      // ⑤ マルチスケイル
+      if (defAbility === "マルチスケイル" && isFullHp) {
+        dmg = Math.floor(dmg * defAbil.multiplier);
+      }
+
+      // タイプ相性が0倍（無効）以外なら、最低1ダメージ保証
+      if (dmg === 0 && effectiveness > 0) dmg = 1;
+
+      damageList.push(dmg);
     }
 
     const ohkoCount = damageList.filter((d) => d >= finalHp).length;
