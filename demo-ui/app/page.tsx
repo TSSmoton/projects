@@ -386,9 +386,9 @@ const TypeBadge = ({ type }: { type: string }) => {
     <span
       style={{
         display: "inline-block",
-        padding: "2px 8px",
+        padding: "2px 5px",
         borderRadius: "6px", // 丸みを持たせる
-        fontSize: "0.7rem",
+        fontSize: "0.5rem",
         fontWeight: "bold",
         backgroundColor: colors.bg,
         color: colors.text,
@@ -666,7 +666,7 @@ export default function Home() {
       }}
     >
       <h1 style={{ textAlign: "center", marginBottom: "30px" }}>
-        ダメージ計算機
+        React練習用ダメ計ツール{" "}
       </h1>
 
       <div
@@ -692,7 +692,7 @@ export default function Home() {
             攻撃側
           </h2>
           <PokemonSearch
-            label="攻撃側ポケモン"
+            label="攻撃側"
             onSelect={setAttacker}
             selectedPokemon={attacker} // ✅ これを追加！
           />
@@ -720,12 +720,12 @@ export default function Home() {
                 <Image
                   src={`/pokemon/${attacker.id}.png`}
                   alt={attacker.name}
-                  width={100}
-                  height={100}
+                  width={32}
+                  height={32}
                   // ローカル画像なので priority をつけると表示が早くなります
                   priority
                   // 画像がない場合のエラー対策
-                  style={{ objectFit: "contain" }}
+                  style={{ objectFit: "contain", imageRendering: "pixelated" }}
                 />
                 {/* ✅ 追加：タイプアイコン（右上絶対配置） */}
                 <div
@@ -1298,7 +1298,7 @@ export default function Home() {
             防御側
           </h2>
           <PokemonSearch
-            label="防御側ポケモン"
+            label="防御側"
             onSelect={setDefender}
             selectedPokemon={defender} // ✅ これを追加！
           />
@@ -1323,15 +1323,25 @@ export default function Home() {
                   width: "70%",
                 }}
               >
-                {/* 外部サイトではなく、自前の /public/pokemon/ フォルダから読み込む */}
+                {/* 外部サイトではなく、自前の /public/pokemon/ フォルダから読み込む
                 <Image
                   src={`/pokemon/${defender.id}.png`}
                   alt={defender.name}
                   width={100}
                   height={100}
                   style={{ objectFit: "contain" }}
+                /> */}
+                {/* 外部サイトではなく、自前の /public/pokemon/ フォルダから読み込む */}
+                <Image
+                  src={`/pokemon/${defender.id}.png`}
+                  alt={defender.name}
+                  width={32}
+                  height={32}
+                  // ローカル画像なので priority をつけると表示が早くなります
+                  priority
+                  // 画像がない場合のエラー対策
+                  style={{ objectFit: "contain", imageRendering: "pixelated" }}
                 />
-
                 {/* ✅ 追加：タイプアイコン（右上絶対配置） */}
                 <div
                   style={{
