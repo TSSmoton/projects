@@ -31,7 +31,6 @@ public class Pokemon {
     private Integer speed;
     private Integer totalStats;
 
-    // ✅ ここから追加！
     // 「1匹のポケモンが複数の技を覚え、1つの技を複数のポケモンが覚える」多対多の設定
     @ManyToMany
     @JoinTable(

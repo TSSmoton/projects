@@ -27,7 +27,7 @@ public class MoveController {
     public List<Move> searchMoves(@RequestParam String name) {
         return moveRepository.findByNameContaining(name);
     }
-// ✅ 「/api/moves/pokemon/445」のように叩くと、ガブリアス(445)の技一覧が返る！
+// 「/api/move/pokemon/445」のように叩くと、ガブリアス(445)の技一覧が返る！
     @GetMapping("/pokemon/{pokemonId}")
     public List<Move> getMovesByPokemonId(@PathVariable Integer pokemonId) {
         return moveRepository.findByPokemonId(pokemonId);

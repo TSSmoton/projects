@@ -694,7 +694,7 @@ export default function Home() {
           <PokemonSearch
             label="攻撃側"
             onSelect={(p: Pokemon) => setAttacker(p)}
-            selectedPokemon={attacker} // ✅ これを追加！
+            selectedPokemon={attacker}
           />
           {attacker && (
             <div style={{ marginTop: "15px", textAlign: "center" }}>
@@ -1167,7 +1167,7 @@ export default function Home() {
                   onSelect={setSelectedMove}
                   selectedPokemonId={attacker?.id} // ✅ ポケモンIDを渡す
                 />
-                {/* --- ここから追加：選択された技の詳細表示 --- */}
+                {/* 選択された技の詳細表示 */}
                 {selectedMove && (
                   <div
                     style={{
@@ -1299,7 +1299,7 @@ export default function Home() {
           <PokemonSearch
             label="防御側"
             onSelect={(p: Pokemon) => setDefender(p)}
-            selectedPokemon={defender} // ✅ これを追加！
+            selectedPokemon={defender}
           />
           {defender && (
             <div style={{ marginTop: "15px", textAlign: "center" }}>

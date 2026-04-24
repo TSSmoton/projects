@@ -60,7 +60,7 @@ public void importMoves(int startId, int endId) {
         }
     }
 
-    // --- 【追加】改行やページ送り文字を消し去る魔法 ---
+    // 改行やページ送り文字を消し去る魔法 ---
     private String cleanText(String text) {
         if (text == null) return "";
         return text.replace("\n", "") // 普通の改行を消す

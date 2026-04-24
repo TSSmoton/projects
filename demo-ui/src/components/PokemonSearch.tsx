@@ -1,6 +1,5 @@
 "use client";
 
-// ✅ 修正: useEffect をインポートに追加
 import React, { useState, useEffect } from "react";
 import { searchPokemon } from "../services/api";
 
@@ -25,11 +24,10 @@ interface Pokemon {
 interface PokemonSearchProps {
   label: string;
   onSelect: (pokemon: Pokemon) => void;
-  // ✅ 追加: 親から「いま選ばれているポケモン」を受け取る
+  // 親から「いま選ばれているポケモン」を受け取る
   selectedPokemon?: Pokemon | null;
 }
 
-// ✅ 修正: 引数に selectedPokemon を追加
 export default function PokemonSearch({
   label,
   onSelect,
@@ -39,7 +37,7 @@ export default function PokemonSearch({
   const [results, setResults] = useState<Pokemon[]>([]);
   const [focusedIndex, setFocusedIndex] = useState(-1);
 
-  // 💥 修正：同期的なState更新を避けるため、非同期関数でラップする
+  // 同期的なState更新を避けるため、非同期関数でラップする
   useEffect(() => {
     let isMounted = true;
 

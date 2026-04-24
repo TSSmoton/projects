@@ -49,7 +49,6 @@ public class PokemonImportService {
 
                 for (Map<String, Object> v : varieties) {
                     Map<String, Object> pInfo = (Map<String, Object>) v.get("pokemon");
-                    // 第1引数に「i (speciesId)」を追加して渡す
                     processAndSave(i, baseJpName, (String) pInfo.get("url"), (boolean) v.get("is_default"));
                 }
             } catch (Exception e) {
@@ -137,7 +136,6 @@ public class PokemonImportService {
         // 全てを足して「合計種族値」としてセット！
         p.setTotalStats(hp + atk + def + spa + spd + spe);
 
-// 👇==== ここから追加 ====👇
         // --- 覚える技の解析 ---
         List<Map<String, Object>> movesList = (List<Map<String, Object>>) pokeData.get("moves");
         List<Integer> moveIds = new ArrayList<>(); // 技IDだけを一旦集めるリスト
@@ -161,7 +159,6 @@ public class PokemonImportService {
         // 貯めた技IDを使って、DBから「一括で」技エンティティを取得（超高速化！）
         List<Move> learnableMoves = moveRepository.findAllById(moveIds);
         p.setLearnableMoves(learnableMoves);
-        // 👆==== ここまで追加 ====👆
 
         pokemonRepository.save(p);
     }
