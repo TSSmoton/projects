@@ -1,4 +1,8 @@
-const API_BASE_URL = "http://localhost:8080/api";
+// 修正前（自分のPC）
+// const API_BASE_URL = "http://localhost:8080/api";
+
+// 修正後（インターネット上のRenderを探しに行く！）
+const API_BASE_URL = "https://projects-cskf.onrender.com/api";
 
 // ポケモン検索用
 export const searchPokemon = async (name: string) => {
@@ -17,7 +21,7 @@ export const searchMoves = async (name: string) => {
   if (!response.ok) throw new Error("Network response was not ok");
   return response.json();
 };
-// ✅ ポケモンIDから、そのポケモンが覚える技リストを取得する関数
+// ポケモンIDから、そのポケモンが覚える技リストを取得する関数
 export const getMovesByPokemonId = async (pokemonId: number) => {
   try {
     // Spring BootのAPIを叩く
