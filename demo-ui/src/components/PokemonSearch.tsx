@@ -8,7 +8,18 @@ import { searchPokemon } from "../services/api";
 interface Pokemon {
   id: number;
   name: string;
-  // ... 他のプロパティ
+  hp: number;
+  attack: number;
+  defense: number;
+  spAttack: number;
+  spDefense: number;
+  speed: number;
+  type1: string;
+  type2?: string;
+  ability1: string;
+  ability2?: string | null;
+  hiddenAbility?: string | null;
+  weight?: number;
 }
 
 interface PokemonSearchProps {

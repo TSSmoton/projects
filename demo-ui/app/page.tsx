@@ -188,7 +188,7 @@ const BaseStatsSummary = ({ pokemon }: { pokemon: Pokemon }) => (
     <div style={{ textAlign: "center" }}>すばやさ: {pokemon.speed}</div>
   </div>
 );
-// ✅ 追加：絶対に画面をスクロールさせない数値入力コンポーネント
+// 絶対に画面をスクロールさせない数値入力コンポーネント
 const WheelNumberInput = ({
   value,
   onChange,
@@ -336,7 +336,7 @@ const RELEVANT_ABILITIES = [
   { name: "かたいツメ", multiplier: 1.3 }, // 直接攻撃1.3倍
   { name: "マルチスケイル", multiplier: 0.5 }, // ダメージ半減
   { name: "いかく", multiplier: 1.0 },
-  { name: "こんじょう", multiplier: 1.5 }, // ✅ 追加（状態異常で攻撃1.5倍）
+  { name: "こんじょう", multiplier: 1.5 }, //（状態異常で攻撃1.5倍）
 ];
 
 // ランク補正の倍率表（-6〜+6）
@@ -357,7 +357,7 @@ const RANK_MODIFIERS: Record<number, number> = {
 };
 // app/page.tsx (Homeコンポーネントの外)
 
-// ✅ 追加：タイプごとの色定義（原作準拠）
+// タイプごとの色定義（原作準拠）
 const TYPE_COLORS: Record<string, { bg: string; text: string }> = {
   ノーマル: { bg: "#A8A878", text: "#fff" },
   ほのお: { bg: "#F08030", text: "#fff" },
@@ -379,7 +379,7 @@ const TYPE_COLORS: Record<string, { bg: string; text: string }> = {
   フェアリー: { bg: "#EE99AC", text: "#fff" },
 };
 
-// ✅ 追加：タイプアイコンコンポーネント
+// タイプアイコンコンポーネント
 const TypeBadge = ({ type }: { type: string }) => {
   const colors = TYPE_COLORS[type] || { bg: "#666", text: "#fff" }; // 未定義タイプへのフォールバック
   return (
@@ -499,7 +499,7 @@ export default function Home() {
     }
     setDefAbility(initialAbility);
 
-    // ✅ 追加：防御側が「いかく」を持って場に出たなら、攻撃側のランクを下げる
+    // 防御側が「いかく」を持って場に出たなら、攻撃側のランクを下げる
     if (initialAbility === "いかく") {
       setAtkRank((prev) => Math.max(-6, prev - 1));
     }
@@ -675,7 +675,7 @@ export default function Home() {
           gap: "20px",
           justifyContent: "center",
           flexWrap: "wrap",
-          alignItems: "center", // ✅ 追加：ボタンを縦の真ん中に配置するため
+          alignItems: "center", // ボタンを縦の真ん中に配置するため
         }}
       >
         {/* 攻撃側設定 */}
@@ -693,7 +693,7 @@ export default function Home() {
           </h2>
           <PokemonSearch
             label="攻撃側"
-            onSelect={setAttacker}
+            onSelect={(p: Pokemon) => setAttacker(p)}
             selectedPokemon={attacker} // ✅ これを追加！
           />
           {attacker && (
@@ -727,7 +727,7 @@ export default function Home() {
                   // 画像がない場合のエラー対策
                   style={{ objectFit: "contain", imageRendering: "pixelated" }}
                 />
-                {/* ✅ 追加：タイプアイコン（右上絶対配置） */}
+                {/* タイプアイコン（右上絶対配置） */}
                 <div
                   style={{
                     position: "absolute",
@@ -899,7 +899,6 @@ export default function Home() {
                   ))}
                 </div>
               </div>
-              {/* 攻撃側の持ち物と特性の選択エリア */}
               {/* 攻撃側の持ち物と特性の選択エリア */}
               <div
                 style={{
@@ -1248,7 +1247,7 @@ export default function Home() {
           )}
         </section>
 
-        {/* ✅ 追加：ここに入れ替えボタンを配置！ */}
+        {/* ここに入れ替えボタンを配置！ */}
         <div style={{ display: "flex", justifyContent: "center" }}>
           <button
             onClick={handleSwap}
@@ -1299,7 +1298,7 @@ export default function Home() {
           </h2>
           <PokemonSearch
             label="防御側"
-            onSelect={setDefender}
+            onSelect={(p: Pokemon) => setDefender(p)}
             selectedPokemon={defender} // ✅ これを追加！
           />
           {defender && (
@@ -1342,7 +1341,7 @@ export default function Home() {
                   // 画像がない場合のエラー対策
                   style={{ objectFit: "contain", imageRendering: "pixelated" }}
                 />
-                {/* ✅ 追加：タイプアイコン（右上絶対配置） */}
+                {/* タイプアイコン（右上絶対配置） */}
                 <div
                   style={{
                     position: "absolute",
@@ -1941,15 +1940,33 @@ export default function Home() {
                 }}
               >
                 <div style={{ fontSize: "1.5rem", fontWeight: "bold" }}>
-                  {res.ohkoProb === 100 ? (
-                    <span style={{ color: "#ef4444" }}>確定1発</span>
-                  ) : res.ohkoProb > 0 ? (
-                    <span style={{ color: "#f59e0b" }}>
-                      乱数1発 ({res.ohkoProb.toFixed(1)}%)
-                    </span>
-                  ) : (
-                    <span style={{ color: "#10b981" }}>確定耐え</span>
-                  )}
+                  {(() => {
+                    if (res.effectiveness === 0)
+                      return (
+                        <span style={{ color: "#888" }}>
+                          無効（ダメージなし）
+                        </span>
+                      );
+                    if (res.ohkoProb === 100)
+                      return <span style={{ color: "#ef4444" }}>確定1発</span>;
+                    if (res.ohkoProb > 0)
+                      return (
+                        <span style={{ color: "#f59e0b" }}>
+                          乱数1発 ({res.ohkoProb.toFixed(1)}%)
+                        </span>
+                      );
+
+                    // 1発で倒せない場合、倒すのに必要な「最小」の攻撃回数を出す (例: HP100 ÷ 最高58 = 切り上げで2)
+                    const minHits = Math.ceil(res.hp / res.max);
+                    // その攻撃回数で、最低乱数ばかり引いても確実に倒せるかを判定するフラグ (例: 最低49 × 2 = 98 < 100 なのでFalse)
+                    const isGuaranteed = res.min * minHits >= res.hp;
+
+                    return isGuaranteed ? (
+                      <span style={{ color: "#10b981" }}>確定{minHits}発</span>
+                    ) : (
+                      <span style={{ color: "#8b5cf6" }}>乱数{minHits}発</span>
+                    );
+                  })()}
                 </div>
                 <p
                   style={{
