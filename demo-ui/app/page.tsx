@@ -439,6 +439,10 @@ export default function Home() {
   const [atkAbility, setAtkAbility] = useState("なし");
   const [defAbility, setDefAbility] = useState("なし");
 
+  // 天候とフィールド のState（初期値は「なし」）
+  const [weather, setWeather] = useState("none"); // none, sun, rain, sand, snow
+  const [terrain, setTerrain] = useState("none"); // none, electric, grassy, misty, psychic
+
   // ランク補正のState（-6 〜 +6）
   const [atkRank, setAtkRank] = useState(0);
   const [defRank, setDefRank] = useState(0);
@@ -534,7 +538,7 @@ export default function Home() {
     };
 
     // =======================================
-    // 0. 技の「威力 (Power)」の計算（★修正ポイント2）
+    // 0. 技の「威力 (Power)」の計算
     // =======================================
     let currentPower = selectedMove.power;
 
@@ -547,6 +551,24 @@ export default function Home() {
       const auraMultiplier = hasAuraBreak ? 0.75 : 1.33;
       currentPower = Math.floor(currentPower * auraMultiplier);
     }
+
+// 本来は「浮いているか」の判定が必要なため、簡易的な判定式を用意
+    const isAtkGrounded = attacker.type1 !== "ひこう" && attacker.type2 !== "ひこう" && atkAbility !== "ふゆう";
+    
+    if (isAtkGrounded) {
+      if (terrain === "electric" && selectedMove.type === "でんき") {
+        currentPower = Math.floor(currentPower * 1.3);
+      } else if (terrain === "grassy" && selectedMove.type === "くさ") {
+        currentPower = Math.floor(currentPower * 1.3);
+      } else if (terrain === "psychic" && selectedMove.type === "エスパー") {
+        currentPower = Math.floor(currentPower * 1.3);
+      }
+    }
+    // グラスフィールド時の「じしん」等半減（対象が浮いていなければ適用されるが、簡略化のため常時適用）
+    if (terrain === "grassy" && ["じしん", "じならし", "マグニチュード"].includes(selectedMove.name)) {
+      currentPower = Math.floor(currentPower * 0.5);
+    }
+
 
     // かたいツメの処理（※できれば isPhysical ではなく、技データに isContact(接触技) を追加して判定するのが理想です）
     if (atkAbility === "かたいツメ" && isPhysical) {
@@ -590,13 +612,37 @@ export default function Home() {
       d = Math.floor(d * defItem.multiplier);
     }
 
+    // 砂嵐: いわタイプの特防1.5倍
+    if (weather === "sand" && !isPhysical && (defender.type1 === "いわ" || defender.type2 === "いわ")) {
+      d = Math.floor(d * 1.5);
+    }
+    // 雪: こおりタイプの防御1.5倍（※SVからの新仕様）
+    if (weather === "snow" && isPhysical && (defender.type1 === "こおり" || defender.type2 === "こおり")) {
+      d = Math.floor(d * 1.5);
+    }
+
     // =======================================
     // 3. 基本ダメージ計算
     // =======================================
-    const baseDamage = Math.floor(
+    let baseDamage = Math.floor(
       Math.floor((Math.floor((2 * 50) / 5 + 2) * currentPower * a) / d) / 50 +
         2,
     );
+
+    // 天候によるダメージ倍率（晴れ・雨）
+    if (weather === "sun") {
+      if (selectedMove.type === "ほのお") baseDamage = Math.floor(baseDamage * 1.5);
+      if (selectedMove.type === "みず") baseDamage = Math.floor(baseDamage * 0.5);
+    } else if (weather === "rain") {
+      if (selectedMove.type === "みず") baseDamage = Math.floor(baseDamage * 1.5);
+      if (selectedMove.type === "ほのお") baseDamage = Math.floor(baseDamage * 0.5);
+    }
+
+    // ミストフィールドによるドラゴン半減
+    const isDefGrounded = defender.type1 !== "ひこう" && defender.type2 !== "ひこう" && defAbility !== "ふゆう";
+    if (terrain === "misty" && selectedMove.type === "ドラゴン" && isDefGrounded) {
+      baseDamage = Math.floor(baseDamage * 0.5);
+    }
 
     // =======================================
     // 4. 乱数展開 ＆ 最終ダメージ補正（★修正ポイント3）
@@ -1301,6 +1347,73 @@ export default function Home() {
             ⇄
           </button>
         </div>
+
+        {/* 天候・フィールド設定エリア */}
+        <div
+          style={{
+            width: "13%",
+            backgroundColor: "#fff",
+            padding: "15px",
+            borderRadius: "10px",
+            boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
+            display: "flex",
+            justifyContent: "space-around",
+            flexWrap: "wrap",
+            gap: "10px",
+          }}
+        >
+          {/* 天候 */}
+          <div>
+            <span style={{ fontWeight: "bold", fontSize: "0.9rem", display: "block", marginBottom: "5px" }}>☀️ 天候</span>
+            <div style={{ display: "flex", gap: "5px", fontSize: "0.8rem", flexWrap: "wrap" }}>
+              {[
+                { label: "なし", value: "none" },
+                { label: "晴れ", value: "sun" },
+                { label: "雨", value: "rain" },
+                { label: "砂嵐", value: "sand" },
+                { label: "雪", value: "snow" },
+              ].map((w) => (
+                <label key={w.value} style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: "2px" }}>
+                  <input
+                    type="radio"
+                    name="weather"
+                    value={w.value}
+                    checked={weather === w.value}
+                    onChange={(e) => setWeather(e.target.value)}
+                  />
+                  {w.label}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* フィールド */}
+          <div>
+            <span style={{ fontWeight: "bold", fontSize: "0.9rem", display: "block", marginBottom: "5px" }}>🌱 フィールド</span>
+            <div style={{ display: "flex", gap: "5px", fontSize: "0.8rem", flexWrap: "wrap" }}>
+              {[
+                { label: "なし", value: "none" },
+                { label: "エレキ", value: "electric" },
+                { label: "グラス", value: "grassy" },
+                { label: "ミスト", value: "misty" },
+                { label: "サイコ", value: "psychic" },
+              ].map((t) => (
+                <label key={t.value} style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: "2px" }}>
+                  <input
+                    type="radio"
+                    name="terrain"
+                    value={t.value}
+                    checked={terrain === t.value}
+                    onChange={(e) => setTerrain(e.target.value)}
+                  />
+                  {t.label}
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+
+
 
         {/* 防御側設定 */}
         <section
