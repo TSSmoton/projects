@@ -712,7 +712,7 @@ export default function Home() {
           </h2>
           <PokemonSearch
             label="攻撃側"
-            onSelect={(p: Pokemon) => setAttacker(p)}
+            onSelect={handleAttackerSelect}
             selectedPokemon={attacker}
           />
           {attacker && (
@@ -1317,7 +1317,7 @@ export default function Home() {
           </h2>
           <PokemonSearch
             label="防御側"
-            onSelect={(p: Pokemon) => setDefender(p)}
+            onSelect={handleDefenderSelect}
             selectedPokemon={defender}
           />
           {defender && (

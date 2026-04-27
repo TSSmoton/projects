@@ -178,18 +178,43 @@ const translateFormName = (rawName: string): string => {
 const convertQueryForAPI = (userInput: string): string => {
   let apiQuery = userInput;
 
-  // FORM_DICTIONARY をループして、入力された日本語を英語に変換する
-  for (const [enKey, jpName] of Object.entries(FORM_DICTIONARY)) {
-    // 1. 完全一致（例：「ガラルのすがた」 -> 「galar」）
-    if (apiQuery.includes(jpName)) {
-      apiQuery = apiQuery.replace(jpName, enKey);
-    } else {
-      // 2. 省略形の対応（例：「ガラル」 -> 「galar」、「メガ」 -> 「mega」）
-      const shortJp = jpName.replace(/(のすがた|フォルム|のミノ|ロトム|モード|のかた|のめん|スタイル|サイズ|キャップ|シンカ)$/, "");
-      // 誤爆を防ぐため、短縮形が2文字以上の場合のみ変換する
-      if (shortJp && shortJp.length >= 2 && apiQuery.includes(shortJp)) {
-        apiQuery = apiQuery.replace(shortJp, enKey);
-      }
+  // DBがおそらく日本語に対応しておらず、英語で探す必要がある「特殊なフォルム」だけをリストアップ
+  const SPECIFIC_REVERSE_DICT: Record<string, string> = {
+    "きずな": "battle-bond",
+    "きずなへんげ": "battle-bond",
+    "サトシ": "ash",
+    "サトシゲッコウガ": "ash",
+    "マイペース": "own-tempo",
+    "ハード": "rock-star",
+    "ハードロック": "rock-star",
+    "マダム": "belle",
+    "アイドル": "pop-star",
+    "ドクター": "phd",
+    "マスクド": "libre",
+    "おきがえ": "cosplay",
+    "オリジナル": "original-cap",
+    "オリジナルキャップ": "original-cap",
+    "ホウエン": "hoenn-cap",
+    "ホウエンキャップ": "hoenn-cap",
+    "シンオウ": "sinnoh-cap",
+    "シンオウキャップ": "sinnoh-cap",
+    "イッシュ": "unova-cap",
+    "イッシュキャップ": "unova-cap",
+    "カロス": "kalos-cap",
+    "カロスキャップ": "kalos-cap",
+    "アローラ": "alola-cap",
+    "アローラキャップ": "alola-cap",
+    "キミにきめた": "partner-cap",
+    "キミにきめたキャップ": "partner-cap",
+    "ワールド": "world-cap",
+    "ワールドキャップ": "world-cap",
+    "相棒": "starter",
+  };
+
+  // 上のリストにある言葉が入力された時"だけ"、裏で英語に変換する
+  for (const [jp, en] of Object.entries(SPECIFIC_REVERSE_DICT)) {
+    if (apiQuery.includes(jp)) {
+      apiQuery = apiQuery.replace(jp, en);
     }
   }
 
