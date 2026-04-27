@@ -23,8 +23,8 @@ interface Pokemon {
 interface PokemonSearchProps {
   label: string;
   onSelect: (pokemon: Pokemon) => void;
-  // 親から「いま選ばれているポケモン」を受け取る
-  selectedPokemon?: Pokemon | null;
+    // 親から「いま選ばれているポケモン」を受け取る
+    selectedPokemon?: Pokemon | null;
 }
 
 // ==========================================
@@ -137,33 +137,63 @@ const FORM_DICTIONARY: Record<string, string> = {
 };
 
 // ==========================================
-// 文字列を綺麗に和訳するフィルター関数
+// 文字列を綺麗に和訳するフィルター関数（英語 ➡️ 日本語）
 // ==========================================
 const translateFormName = (rawName: string): string => {
-  // 「ピカチュウ(pikachu-rock-star)」のような形式かチェック
-  const match = rawName.match(/^(.*?)\((.*?)\)$/);
-  if (!match) return rawName; // カッコがなければそのまま（例: ガブリアス）
+  const match = rawName.match(/^(.*?)\s*[(（](.*?)[)）]$/);
+  if (!match) return rawName;
 
-  const jpName = match[1]; // "ピカチュウ"
-  const enForm = match[2]; // "pikachu-rock-star"
+  const jpName = match[1].trim();
+  const enFull = match[2].trim();
 
-  // PokeAPIの英語名は「(英語のポケモン名)-(フォルム名)」なので、
-  // ハイフンで切って最初の単語（pikachu等）を捨てる
-  const parts = enForm.split("-");
-  parts.shift();
-  const formKey = parts.join("-"); // "rock-star" や "mega-x" になる
+  const parts = enFull.split("-");
+  if (parts.length > 1) {
+    parts.shift();
+  }
+  const formKey = parts.join("-");
+  
+  let translated = FORM_DICTIONARY[formKey];
 
-  const translated = FORM_DICTIONARY[formKey];
+  if (!translated) {
+    for (const key in FORM_DICTIONARY) {
+      if (formKey.includes(key)) {
+        translated = FORM_DICTIONARY[key];
+        break;
+      }
+    }
+  }
 
   if (translated) {
-    // 辞書にあれば和訳する
     return `${jpName} (${translated})`;
   } else if (formKey) {
-    // 辞書にない場合でも「極論、英語は出したくない」という要望に合わせて、英語を隠す
-    return `${jpName} (特殊なすがた)`;
+    return `${jpName} (${formKey})`;
   } else {
     return jpName;
   }
+};
+
+// ==========================================
+// 🔍 検索入力の逆翻訳フィルター（日本語 ➡️ 英語）
+// ==========================================
+const convertQueryForAPI = (userInput: string): string => {
+  let apiQuery = userInput;
+
+  // FORM_DICTIONARY をループして、入力された日本語を英語に変換する
+  for (const [enKey, jpName] of Object.entries(FORM_DICTIONARY)) {
+    // 1. 完全一致（例：「ガラルのすがた」 -> 「galar」）
+    if (apiQuery.includes(jpName)) {
+      apiQuery = apiQuery.replace(jpName, enKey);
+    } else {
+      // 2. 省略形の対応（例：「ガラル」 -> 「galar」、「メガ」 -> 「mega」）
+      const shortJp = jpName.replace(/(のすがた|フォルム|のミノ|ロトム|モード|のかた|のめん|スタイル|サイズ|キャップ|シンカ)$/, "");
+      // 誤爆を防ぐため、短縮形が2文字以上の場合のみ変換する
+      if (shortJp && shortJp.length >= 2 && apiQuery.includes(shortJp)) {
+        apiQuery = apiQuery.replace(shortJp, enKey);
+      }
+    }
+  }
+
+  return apiQuery;
 };
 
 export default function PokemonSearch({
@@ -174,22 +204,15 @@ export default function PokemonSearch({
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Pokemon[]>([]);
   const [focusedIndex, setFocusedIndex] = useState(-1);
-
-  // ★追加1：ドロップダウンの開閉状態を管理するState
   const [isOpen, setIsOpen] = useState(false);
-
-  // ★追加2：コンポーネントの外側クリックを検知するためのRef
   const wrapperRef = useRef<HTMLDivElement>(null);
-
-  // ★亡霊対策1：検索の「整理券番号」を管理する変数
   const searchTicket = useRef(0);
+
   useEffect(() => {
     let isMounted = true;
     const syncQuery = async () => {
       if (isMounted) {
-        setQuery(selectedPokemon?.name || "");
-        // 親から新しいポケモンが渡ってきたら（＝入れ替えなどが起きたら）、
-        // 残っている検索結果の亡霊を消し去る！
+        setQuery(selectedPokemon ? translateFormName(selectedPokemon.name) : "");
         setResults([]);
         setIsOpen(false);
       }
@@ -200,18 +223,12 @@ export default function PokemonSearch({
     };
   }, [selectedPokemon]);
 
-  // ★追加3：外側クリックでドロップダウンを閉じる処理（バグ2の修正）
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      // クリックした場所(e.target)が、wrapperRefの中になければ閉じる
-      if (
-        wrapperRef.current &&
-        !wrapperRef.current.contains(e.target as Node)
-      ) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
         setIsOpen(false);
       }
     };
-    // 画面全体にクリックの監視を付ける
     document.addEventListener("mousedown", handleClickOutside);
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
@@ -219,7 +236,6 @@ export default function PokemonSearch({
   }, []);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    // ★ isOpenがfalseの時はキーボード操作を無視する
     if (!isOpen || results.length === 0) return;
 
     if (e.key === "ArrowDown") {
@@ -232,47 +248,58 @@ export default function PokemonSearch({
       e.preventDefault();
       if (focusedIndex >= 0 && focusedIndex < results.length) {
         const selected = results[focusedIndex];
-        onSelect(selected);
-        setQuery(selected.name);
+        
+        // ★修正ポイント：親に渡す段階で、データの中身ごと和訳してしまう！
+        const translatedPokemon = { ...selected, name: translateFormName(selected.name) };
+
+        onSelect(translatedPokemon);
+        setQuery(translatedPokemon.name);
         setResults([]);
         setFocusedIndex(-1);
-        setIsOpen(false); // ★ 選択完了したら確実に閉じる
-
-        // ★亡霊対策2：決定した瞬間に整理券の番号を進める（裏で待っている古い通信を無効化）
+        setIsOpen(false);
         searchTicket.current += 1;
       }
     }
   };
 
-  const handleInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
+// ★追加：タイマーを記憶するための変数（useStateの下あたりに追加）
+  const typingTimer = useRef<NodeJS.Timeout | null>(null);
+
+  // ----------------------------------------------------
+  // handleInputを丸ごとこれに差し替え！
+  // ----------------------------------------------------
+  const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setQuery(val);
     setFocusedIndex(-1);
-    setIsOpen(true); // ★ 文字が入力されたらドロップダウンを開く
+    setIsOpen(true);
 
-    // ★亡霊対策3：文字を打つたびに整理券を発行して番号を控える
-    const currentTicket = ++searchTicket.current;
+    // ★魔法：入力があるたびに、前のタイマーをキャンセルする（連打防止）
+    if (typingTimer.current) {
+      clearTimeout(typingTimer.current);
+    }
 
     if (val.length > 0) {
-      try {
-        const data = await searchPokemon(val);
-        // ★ バグ1の対策：
-        // APIからデータが返ってきた時、ユーザーがすでに決定ボタン(Enter)を押して
-        // isOpenがfalseになっていれば、裏でresultsがセットされても画面には出ない。
-        // ★亡霊対策4：データが返ってきた時、自分の整理券が「最新」の時だけ画面に出す！
-        if (currentTicket === searchTicket.current) {
-          setResults(data);
+      // ★魔法：ユーザーが「0.3秒間」入力を止めたら、初めてAPIを叩く
+      typingTimer.current = setTimeout(async () => {
+        const currentTicket = ++searchTicket.current;
+        const apiSearchTerm = convertQueryForAPI(val); // 逆翻訳
+
+        try {
+          const data = await searchPokemon(apiSearchTerm);
+          if (currentTicket === searchTicket.current) {
+            setResults(data);
+          }
+        } catch (err) {
+          console.error("検索エラー:", err);
         }
-      } catch (err) {
-        console.error("検索エラー:", err);
-      }
+      }, 300); // 300ミリ秒（0.3秒）待つ
     } else {
       setResults([]);
     }
   };
 
   return (
-    // ★追加2のRefを一番外側のdivにセット
     <div ref={wrapperRef} style={{ position: "relative", width: "100%" }}>
       <p style={{ fontSize: "0.8rem", marginBottom: "4px" }}>{label}</p>
       <input
@@ -280,7 +307,7 @@ export default function PokemonSearch({
         value={query}
         onChange={handleInput}
         onKeyDown={handleKeyDown}
-        onFocus={() => setIsOpen(true)} // ★ 入力欄をクリック（フォーカス）したら開く
+        onFocus={() => setIsOpen(true)}
         placeholder={`${label}の名前...`}
         style={{
           width: "95%",
@@ -291,7 +318,6 @@ export default function PokemonSearch({
         }}
       />
 
-      {/* ★ isOpen が true の時だけ <ul> を表示するように条件を追加 */}
       {isOpen && results.length > 0 && (
         <ul
           style={{
@@ -313,11 +339,14 @@ export default function PokemonSearch({
             <li
               key={m.id}
               onClick={() => {
-                onSelect(m);
-                setQuery(translateFormName(m.name)); // 検索窓に入る文字も綺麗にする！
+                // ★修正ポイント：親に渡す段階で、データの中身ごと和訳してしまう！
+                const translatedPokemon = { ...m, name: translateFormName(m.name) };
+
+                onSelect(translatedPokemon);
+                setQuery(translatedPokemon.name);
                 setResults([]);
                 setFocusedIndex(-1);
-                setIsOpen(false); // ★ クリックで選択した時も確実に閉じる
+                setIsOpen(false);
                 searchTicket.current += 1;
               }}
               style={{
