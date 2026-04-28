@@ -652,7 +652,8 @@ const calculateResult = () => {
     const stabMod = (currentMoveType === attacker.type1 || currentMoveType === attacker.type2)
         ? (atkAbility === "てきおうりょく" ? 2.0 : 1.5) : 1.0;
 
-    const getTypeMultiplier = (mType: string, tType: string | null, abil: string) => {
+// tType に null と undefined の両方を許可する
+    const getTypeMultiplier = (mType: string, tType: string | null | undefined, abil: string) => {
       if (!tType) return 1.0;
       let m = TYPE_CHART[mType]?.[tType] ?? 1.0;
       if ((abil === "きもったま" || abil === "マインドアイ") && tType === "ゴースト" && (mType === "ノーマル" || mType === "かくとう") && m === 0) return 1.0;
