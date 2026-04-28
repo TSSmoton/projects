@@ -31,6 +31,11 @@ interface Move {
   type: string;
   category: "物理" | "特殊" | "変化"; // 決まった文字列のみ許可
   power: number;
+  isContact?: boolean;   // 接触技フラグ（かたいツメ用）
+  targetStat?: "def";    // 特殊だけど防御参照（サイコショック・サイコブレイク用）
+  minHits?: number;      // 連続技の最小回数
+  maxHits?: number;      // 連続技の最大回数
+  isWaterPowerUp?: boolean; // すいほうなどの補正用
 }
 
 interface Item {
@@ -323,10 +328,11 @@ const ITEMS: Item[] = [
   { name: "こだわりメガネ", multiplier: 1.5, type: "spa" },
   { name: "ちからのハチマキ", multiplier: 1.1, type: "dmg" },
   { name: "タイプ強化アイテム", multiplier: 1.2, type: "dmg" },
-  { name: "たつじんのおび", multiplier: 1.3, type: "dmg" },
+  { name: "たつじんのおび", multiplier: 1.2, type: "dmg" },
   { name: "とつげきチョッキ", multiplier: 1.5, type: "spd" },
   { name: "オボンの実", multiplier: 0.25, type: "heal" }, // HPバー連動用
   { name: "メガストーン", multiplier: 1, type: "none" }, // 表示用
+  { name: "たべのこし", multiplier: 0.0625, type: "heal" }, // 表示用
 ];
 // 計算に影響する特性リスト（代表的なもの）
 const RELEVANT_ABILITIES = [
@@ -419,6 +425,7 @@ const getAbilitiesArray = (p: Pokemon | null): string[] => {
   return [p.ability1, p.ability2, p.hiddenAbility].filter(Boolean) as string[];
 };
 
+
 export default function Home() {
   const [attacker, setAttacker] = useState<Pokemon | null>(null);
   const [defender, setDefender] = useState<Pokemon | null>(null);
@@ -509,127 +516,131 @@ export default function Home() {
     }
   };
 
+
+//   const simulateSurvival = (hp: number, damage: number, item: string) => {
+//   let currentHp = hp;
+//   let hits = 0;
+  
+//   while (currentHp > 0 && hits < 10) { // 最大10発まで計算
+//     hits++;
+//     currentHp -= damage; // 1発受ける
+    
+//     if (currentHp <= 0) break; // 倒れた
+
+//     // オボンの実（HP半分以下で25%回復）
+//     if (item === "オボンの実" && currentHp <= hp / 2) {
+//       currentHp = Math.min(hp, currentHp + Math.floor(hp / 4));
+//       item = "消費済み"; // 1回きり
+//     }
+    
+//     // 食べ残し（毎ターン 1/16 回復）
+//     if (item === "たべのこし") {
+//       currentHp = Math.min(hp, currentHp + Math.floor(hp / 16));
+//     }
+//   }
+//   return hits; // 何発耐えたか
+// };
+
+  
+  /**
+ * 持ち物データ（Item）を直接使った生存シミュレーション
+ */
+const simulateSurvival = (maxHp: number, damage: number, item: Item) => {
+  let currentHp = maxHp;
+  let hits = 0;
+  let hasUsedHealItem = false;
+
+  // 最大10発まで計算（それ以上は実質無限）
+  while (currentHp > 0 && hits < 10) {
+    hits++;
+    currentHp -= damage;
+
+    if (currentHp <= 0) break;
+
+    // 💡 type: "heal" の持ち物を汎用的に処理
+    if (item.type === "heal") {
+      // 1. オボンの実（HP半分以下で発動、1回きり）
+      if (item.name === "オボンの実" && !hasUsedHealItem && currentHp <= maxHp / 2) {
+        currentHp = Math.min(maxHp, currentHp + Math.floor(maxHp * item.multiplier));
+        hasUsedHealItem = true;
+      }
+      
+      // 2. たべのこし（毎ターン終了時に継続回復）
+      if (item.name === "たべのこし") {
+        currentHp = Math.min(maxHp, currentHp + Math.floor(maxHp * item.multiplier));
+      }
+    }
+  }
+  return hits;
+};
+
+  
+  
+  
+  
   // --- ダメージ計算ロジック ---
-  const calculateResult = () => {
+
+const calculateResult = () => {
     if (!attacker || !defender || !selectedMove) return null;
 
     if (selectedMove.category === "変化") {
-      return {
-        min: 0,
-        max: 0,
-        hp: 100,
-        effectiveness: 0,
-        ohkoProb: 0,
-        isStatus: true,
-      };
+      return { min: 0, max: 0, hp: 100, effectiveness: 0, ohkoProb: 0, isStatus: true, survival: { minHits: 0, maxHits: 0 } };
     }
 
     const isPhysical = selectedMove.category === "物理";
     const finalHp = calcStat(defender.hp, defHpEv, 1.0, true);
-    const isFullHp = true; // （※後々、現在のHPを参照するように変更してください）
+    const isFullHp = true;
 
-    const atkAbil = RELEVANT_ABILITIES.find((a) => a.name === atkAbility) || {
-      name: "なし",
-      multiplier: 1.0,
-    };
-    const defAbil = RELEVANT_ABILITIES.find((a) => a.name === defAbility) || {
-      name: "なし",
-      multiplier: 1.0,
-    };
+    const atkAbil = RELEVANT_ABILITIES.find((a) => a.name === atkAbility) || { name: "なし", multiplier: 1.0 };
+    const defAbil = RELEVANT_ABILITIES.find((a) => a.name === defAbility) || { name: "なし", multiplier: 1.0 };
 
-    // =======================================
     // 0. 技の「威力 (Power)」の計算
-    // =======================================
     let currentPower = selectedMove.power;
 
-    // フェアリーオーラの処理
-    const hasFairyAura =
-      atkAbility === "フェアリーオーラ" || defAbility === "フェアリーオーラ";
-    const hasAuraBreak =
-      atkAbility === "オーラブレイク" || defAbility === "オーラブレイク";
+    const hasFairyAura = atkAbility === "フェアリーオーラ" || defAbility === "フェアリーオーラ";
+    const hasAuraBreak = atkAbility === "オーラブレイク" || defAbility === "オーラブレイク";
     if (hasFairyAura && selectedMove.type === "フェアリー") {
       const auraMultiplier = hasAuraBreak ? 0.75 : 1.33;
       currentPower = Math.floor(currentPower * auraMultiplier);
     }
 
-// 本来は「浮いているか」の判定が必要なため、簡易的な判定式を用意
     const isAtkGrounded = attacker.type1 !== "ひこう" && attacker.type2 !== "ひこう" && atkAbility !== "ふゆう";
-    
     if (isAtkGrounded) {
-      if (terrain === "electric" && selectedMove.type === "でんき") {
-        currentPower = Math.floor(currentPower * 1.3);
-      } else if (terrain === "grassy" && selectedMove.type === "くさ") {
-        currentPower = Math.floor(currentPower * 1.3);
-      } else if (terrain === "psychic" && selectedMove.type === "エスパー") {
-        currentPower = Math.floor(currentPower * 1.3);
-      }
+      if (terrain === "electric" && selectedMove.type === "でんき") currentPower = Math.floor(currentPower * 1.3);
+      else if (terrain === "grassy" && selectedMove.type === "くさ") currentPower = Math.floor(currentPower * 1.3);
+      else if (terrain === "psychic" && selectedMove.type === "エスパー") currentPower = Math.floor(currentPower * 1.3);
     }
-    // グラスフィールド時の「じしん」等半減（対象が浮いていなければ適用されるが、簡略化のため常時適用）
     if (terrain === "grassy" && ["じしん", "じならし", "マグニチュード"].includes(selectedMove.name)) {
       currentPower = Math.floor(currentPower * 0.5);
     }
 
-
-    // かたいツメの処理（※できれば isPhysical ではなく、技データに isContact(接触技) を追加して判定するのが理想です）
     if (atkAbility === "かたいツメ" && isPhysical) {
       currentPower = Math.floor(currentPower * atkAbil.multiplier);
     }
 
-    // =======================================
     // 1. 攻撃力 (A) の計算
-    // =======================================
-    let a = calcStat(
-      isPhysical ? attacker.attack : attacker.spAttack,
-      atkEv,
-      atkNature,
-    );
+    let a = calcStat(isPhysical ? attacker.attack : attacker.spAttack, atkEv, atkNature);
     a = Math.floor(a * RANK_MODIFIERS[atkRank]);
-
-    if (atkAbility === "ちからもち" && isPhysical) {
-      a = Math.floor(a * atkAbil.multiplier);
-    }
-    if (atkItem.type === (isPhysical ? "atk" : "spa")) {
-      a = Math.floor(a * atkItem.multiplier);
-    }
-    // やけど ＆ こんじょうの処理
+    if (atkAbility === "ちからもち" && isPhysical) a = Math.floor(a * atkAbil.multiplier);
+    if (atkItem.type === (isPhysical ? "atk" : "spa")) a = Math.floor(a * atkItem.multiplier);
     if (isAtkBurned && isPhysical) {
-      a =
-        atkAbility === "こんじょう"
-          ? Math.floor(a * atkAbil.multiplier)
-          : Math.floor(a * 0.5);
+      a = atkAbility === "こんじょう" ? Math.floor(a * atkAbil.multiplier) : Math.floor(a * 0.5);
     }
 
-    // =======================================
     // 2. 防御力 (D) の計算
-    // =======================================
-    let d = calcStat(
-      isPhysical ? defender.defense : defender.spDefense,
-      defEv,
-      defNature,
-    );
+    const targetsPhysicalDef = ["サイコショック", "サイコブレイク", "しんぴのつるぎ"].includes(selectedMove.name);
+    const usesPhysicalStat = isPhysical || targetsPhysicalDef;
+
+    let d = calcStat(usesPhysicalStat ? defender.defense : defender.spDefense, defEv, defNature);
     d = Math.floor(d * RANK_MODIFIERS[defRank]);
-    if (defItem.type === (isPhysical ? "def" : "spd")) {
-      d = Math.floor(d * defItem.multiplier);
-    }
+    if (defItem.type === (usesPhysicalStat ? "def" : "spd")) d = Math.floor(d * defItem.multiplier);
 
-    // 砂嵐: いわタイプの特防1.5倍
-    if (weather === "sand" && !isPhysical && (defender.type1 === "いわ" || defender.type2 === "いわ")) {
-      d = Math.floor(d * 1.5);
-    }
-    // 雪: こおりタイプの防御1.5倍（※SVからの新仕様）
-    if (weather === "snow" && isPhysical && (defender.type1 === "こおり" || defender.type2 === "こおり")) {
-      d = Math.floor(d * 1.5);
-    }
+    if (weather === "sand" && !usesPhysicalStat && (defender.type1 === "いわ" || defender.type2 === "いわ")) d = Math.floor(d * 1.5);
+    if (weather === "snow" && usesPhysicalStat && (defender.type1 === "こおり" || defender.type2 === "こおり")) d = Math.floor(d * 1.5);
 
-    // =======================================
     // 3. 基本ダメージ計算
-    // =======================================
-    let baseDamage = Math.floor(
-      Math.floor((Math.floor((2 * 50) / 5 + 2) * currentPower * a) / d) / 50 +
-        2,
-    );
+    let baseDamage = Math.floor(Math.floor((Math.floor((2 * 50) / 5 + 2) * currentPower * a) / d) / 50 + 2);
 
-    // 天候によるダメージ倍率（晴れ・雨）
     if (weather === "sun") {
       if (selectedMove.type === "ほのお") baseDamage = Math.floor(baseDamage * 1.5);
       if (selectedMove.type === "みず") baseDamage = Math.floor(baseDamage * 0.5);
@@ -638,64 +649,63 @@ export default function Home() {
       if (selectedMove.type === "ほのお") baseDamage = Math.floor(baseDamage * 0.5);
     }
 
-    // ミストフィールドによるドラゴン半減
     const isDefGrounded = defender.type1 !== "ひこう" && defender.type2 !== "ひこう" && defAbility !== "ふゆう";
     if (terrain === "misty" && selectedMove.type === "ドラゴン" && isDefGrounded) {
       baseDamage = Math.floor(baseDamage * 0.5);
     }
 
-    // =======================================
-    // 4. 乱数展開 ＆ 最終ダメージ補正（★修正ポイント3）
-    // =======================================
-    const stabMod =
-      selectedMove.type === attacker.type1 ||
-      selectedMove.type === attacker.type2
-        ? atkAbility === "てきおうりょく"
-          ? atkAbil.multiplier
-          : 1.5
-        : 1.0;
+    // 4. 乱数展開 ＆ 相性判定
+    const stabMod = (selectedMove.type === attacker.type1 || selectedMove.type === attacker.type2)
+        ? (atkAbility === "てきおうりょく" ? 2.0 : 1.5) : 1.0;
 
-    const type1Mod = TYPE_CHART[selectedMove.type]?.[defender.type1] ?? 1.0;
-    const type2Mod = defender.type2
-      ? (TYPE_CHART[selectedMove.type]?.[defender.type2] ?? 1.0)
-      : 1.0;
-    const effectiveness = type1Mod * type2Mod;
+    const getTypeMultiplier = (mType, tType, abil) => {
+      if (!tType) return 1.0;
+      let m = TYPE_CHART[mType]?.[tType] ?? 1.0;
+      if ((abil === "きもったま" || abil === "マインドアイ") && tType === "ゴースト" && (mType === "ノーマル" || mType === "かくとう") && m === 0) return 1.0;
+      return m;
+    };
+
+    const type1Mod = getTypeMultiplier(selectedMove.type, defender.type1, atkAbility);
+    const type2Mod = getTypeMultiplier(selectedMove.type, defender.type2, atkAbility);
+    let effectiveness = type1Mod * type2Mod;
+
+    if (defAbility === "ふゆう" && selectedMove.type === "じめん" && atkAbility !== "かたやぶり") effectiveness = 0;
 
     const damageList = [];
-
-    // 85〜100の乱数ごとに、切り捨てながら最終ダメージを計算する
     for (let i = 85; i <= 100; i++) {
-      let dmg = Math.floor((baseDamage * i) / 100); // ① 乱数
-      dmg = Math.floor(dmg * stabMod); // ② タイプ一致
-      dmg = Math.floor(dmg * effectiveness); // ③ タイプ相性
+      let dmg = Math.floor((baseDamage * i) / 100);
+      dmg = Math.floor(dmg * stabMod);
+      dmg = Math.floor(dmg * effectiveness);
 
-      // ④ 強化アイテム
-      if (atkItem.type === "dmg") {
+      // ★アイテム補正：たつじんのおびを「抜群のみ」に限定
+      if (atkItem.name === "たつじんのおび") {
+        if (effectiveness > 1) dmg = Math.floor(dmg * atkItem.multiplier);
+      } else if (atkItem.type === "dmg") {
         dmg = Math.floor(dmg * atkItem.multiplier);
       }
-      // ⑤ マルチスケイル
-      if (defAbility === "マルチスケイル" && isFullHp) {
-        dmg = Math.floor(dmg * defAbil.multiplier);
-      }
 
-      // タイプ相性が0倍（無効）以外なら、最低1ダメージ保証
+      if (defAbility === "マルチスケイル" && isFullHp) dmg = Math.floor(dmg * defAbil.multiplier);
       if (dmg === 0 && effectiveness > 0) dmg = 1;
-
       damageList.push(dmg);
     }
 
     const ohkoCount = damageList.filter((d) => d >= finalHp).length;
     const ohkoProb = (ohkoCount / 16) * 100;
 
+    // 💡 回復込みの確定数シミュレーションを実行
+    const minHits = simulateSurvival(finalHp, damageList[15], defItem); 
+    const maxHits = simulateSurvival(finalHp, damageList[0], defItem);
+
     return {
-      min: damageList[0],
-      max: damageList[15],
-      hp: finalHp,
-      effectiveness,
-      ohkoProb,
-      isStatus: false,
+      min: damageList[0], max: damageList[15], hp: finalHp,
+      effectiveness, ohkoProb, isStatus: false,
+      damageList,
+      survival: { minHits, maxHits }
     };
   };
+
+
+
   // 計算結果を変数に格納（nullの可能性もあるので注意）
   const res = calculateResult();
   // ✅ 攻撃側と防御側をそっくり入れ替える関数
@@ -721,6 +731,123 @@ export default function Home() {
     setIsAtkBurned(false);
   };
 
+// バッジの色とテキストを判定する関数
+const getBadgeStyle = (prob: number) => {
+  if (prob === 100) return { label: "High Damage", bg: "#fee2e2", text: "#ef4444" };
+  if (prob > 0) return { label: "Chance", bg: "#fef3c7", text: "#d97706" };
+  return { label: "Safe", bg: "#dcfce7", text: "#16a34a" };
+};
+
+
+const getSurvivalText = (res: any, item: any) => {
+  if (res.effectiveness === 0) return { text: "無効", color: "#888" };
+
+  const hp = res.hp;
+  const damageList = res.damageList;
+  const isRecovery = ["オボンの実", "たべのこし"].includes(item.name);
+
+  // --- 1. 最悪のケース（確定数）を計算 ---
+  const calcMaxHits = () => {
+    let tempHp = hp;
+    let hasUsedBerry = false;
+    let h = 0;
+    const minDmg = damageList[0];
+    while (tempHp > 0 && h < 20) { // 最大20発まで追跡
+      h++;
+      tempHp -= minDmg;
+      if (tempHp <= 0) return h;
+      if (item.name === "オボンの実" && !hasUsedBerry && tempHp <= hp / 2) {
+        tempHp = Math.min(hp, tempHp + Math.floor(hp / 4));
+        hasUsedBerry = true;
+      }
+      if (item.name === "たべのこし") tempHp = Math.min(hp, tempHp + Math.floor(hp / 16));
+    }
+    return h;
+  };
+
+  const maxHits = calcMaxHits();
+
+  // --- 2. 確率分布をDPで計算（1600万通りを瞬時に処理） ---
+  // Mapのキー: "現在のHP,オボン使用済みか(0 or 1)"
+  let currentStates = new Map<string, number>();
+  currentStates.set(`${hp},0`, 1);
+
+  let resultProbs = new Array(7).fill(0); // 0〜6発の確率
+  let totalPatterns = 1;
+
+  for (let h = 1; h <= 6; h++) {
+    totalPatterns *= 16;
+    let nextStates = new Map<string, number>();
+    let killsThisTurn = 0;
+
+    for (const [state, count] of currentStates) {
+      const [currentHp, berryUsedStr] = state.split(",").map(Number);
+      const berryUsed = berryUsedStr === 1;
+
+      for (const dmg of damageList) {
+        let nextHp = currentHp - dmg;
+        if (nextHp <= 0) {
+          killsThisTurn += count;
+        } else {
+          let nextBerryUsed = berryUsed;
+          // 回復処理
+          if (item.name === "オボンの実" && !nextBerryUsed && nextHp <= hp / 2) {
+            nextHp = Math.min(hp, nextHp + Math.floor(hp / 4));
+            nextBerryUsed = true;
+          }
+          if (item.name === "たべのこし") {
+            nextHp = Math.min(hp, nextHp + Math.floor(hp / 16));
+          }
+          const key = `${nextHp},${nextBerryUsed ? 1 : 0}`;
+          nextStates.set(key, (nextStates.get(key) || 0) + count);
+        }
+      }
+    }
+    resultProbs[h] = (killsThisTurn / totalPatterns) * 100;
+    // すでに倒した分を次のターンの計算に引き継ぐ
+    if (killsThisTurn > 0) {
+       // 倒せなかった個体だけが次のターンへ
+    }
+    currentStates = nextStates;
+    if (currentStates.size === 0) break; 
+  }
+
+// --- 3. 表示の決定 ---
+  const itemLabel = isRecovery ? `(${item.name}込み)` : "";
+  
+  // 1〜6発の中で最初に確率が発生したものを探す
+  const minHits = resultProbs.findIndex((p, i) => i > 0 && p > 0);
+  
+  if (minHits === -1) return { text: "確定7発以上", color: "#6366f1", sub: itemLabel };
+
+  const prob = resultProbs[minHits];
+  const diff = maxHits - minHits;
+  const maxHitsWarning = diff >= 2 ? ` / 確定${maxHits}発` : "";
+
+  // 💡 確率の表示フォーマットを賢くする（0.0%問題を解決）
+  let probText = "";
+  if (prob >= 99.9) {
+    probText = "100";
+  } else if (prob >= 0.1) {
+    probText = prob.toFixed(1); // 例: 85.4%
+  } else if (prob >= 0.01) {
+    probText = prob.toFixed(2); // 例: 0.04%
+  } else {
+    probText = "<0.01"; // 1万分の1以下の超低確率
+  }
+
+  // ほぼ100%（99.9%以上）なら確定扱い
+  if (prob >= 99.9) { 
+    return { text: `確定${minHits}発`, color: "#10b981", sub: itemLabel };
+  }
+
+  return {
+    text: `乱数${minHits}発 (${probText}%)${maxHitsWarning}`,
+    color: "#8b5cf6",
+    sub: itemLabel
+  };
+};
+  
   return (
     <main
       style={{
@@ -1962,158 +2089,58 @@ export default function Home() {
       </div>
 
       {/* 計算結果表示エリア */}
-      <div
-        style={{
-          marginTop: "20px",
-          display: "flex",
-          justifyContent: "center",
-        }}
-      >
-        <div
-          style={{
-            padding: "30px",
-            backgroundColor: "#ffffff", // 白ベースに変更
-            color: "#333",
-            borderRadius: "20px",
-            width: "100%",
-            maxWidth: "600px",
-            boxShadow: "0 10px 25px rgba(0,0,0,0.1)", // ふんわりした影
-            border: "1px solid #eaeaea",
-          }}
-        >
-          {!res ? (
-            <p style={{ textAlign: "center", color: "#999" }}>
-              ポケモンと技を選択してダメージを測定
-            </p>
-          ) : res.isStatus ? (
-            <h2 style={{ textAlign: "center", color: "#888" }}>
-              変化技（ダメージなし）
-            </h2>
-          ) : (
-            <>
-              {/* 状態表示ラベル */}
-              <div style={{ textAlign: "center", marginBottom: "15px" }}>
-                <span
-                  style={{
-                    padding: "4px 12px",
-                    borderRadius: "20px",
-                    fontSize: "0.8rem",
-                    fontWeight: "bold",
-                    backgroundColor:
-                      res.ohkoProb === 100
-                        ? "#fee2e2"
-                        : res.ohkoProb > 0
-                          ? "#fef3c7"
-                          : "#dcfce7",
-                    color:
-                      res.ohkoProb === 100
-                        ? "#ef4444"
-                        : res.ohkoProb > 0
-                          ? "#d97706"
-                          : "#16a34a",
-                  }}
-                >
-                  {res.ohkoProb === 100
-                    ? "High Damage"
-                    : res.ohkoProb > 0
-                      ? "Chance"
-                      : "Safe"}
-                </span>
-              </div>
+<div style={{ marginTop: "20px", display: "flex", justifyContent: "center" }}>
+  <div style={{ padding: "30px", backgroundColor: "#fff", borderRadius: "20px", width: "100%", maxWidth: "600px", boxShadow: "0 10px 25px rgba(0,0,0,0.1)", border: "1px solid #eaeaea" }}>
+    
+    {!res ? (
+      <p style={{ textAlign: "center", color: "#999" }}>ポケモンと技を選択してダメージを測定</p>
+    ) : res.isStatus ? (
+      <h2 style={{ textAlign: "center", color: "#888" }}>変化技（ダメージなし）</h2>
+    ) : (
+      <>
+        {/* 1. 状態バッジ */}
+        {(() => {
+          const badge = getBadgeStyle(res.ohkoProb);
+          return (
+            <div style={{ textAlign: "center", marginBottom: "15px" }}>
+              <span style={{ padding: "4px 12px", borderRadius: "20px", fontSize: "0.8rem", fontWeight: "bold", backgroundColor: badge.bg, color: badge.text }}>
+                {badge.label}
+              </span>
+            </div>
+          );
+        })()}
 
-              {/* メインダメージ数値 */}
-              <div style={{ textAlign: "center" }}>
-                <p
-                  style={{
-                    fontSize: "0.9rem",
-                    color: "#666",
-                    marginBottom: "0",
-                  }}
-                >
-                  ダメージ範囲
-                </p>
-                <h2
-                  style={{
-                    fontSize: "3rem",
-                    fontWeight: "900",
-                    margin: "5px 0",
-                    color: "#1a1a1a",
-                  }}
-                >
-                  {res.effectiveness === 0
-                    ? "0"
-                    : `${Math.max(1, res.min)} 〜 ${Math.max(1, res.max)}`}
-                </h2>
-                <p
-                  style={{
-                    fontSize: "1.1rem",
-                    fontWeight: "bold",
-                    color: "#666",
-                  }}
-                >
-                  （{((res.min / res.hp) * 100).toFixed(1)}% 〜{" "}
-                  {((res.max / res.hp) * 100).toFixed(1)}%）
-                </p>
-              </div>
-
-              {/* HPバー */}
-              {res.effectiveness > 0 && (
-                <DamageBar hp={res.hp} minDam={res.min} maxDam={res.max} />
-              )}
-
-              {/* 確定数メッセージ */}
-              <div
-                style={{
-                  textAlign: "center",
-                  padding: "15px",
-                  borderRadius: "12px",
-                  backgroundColor: "#f8fafc",
-                  marginTop: "10px",
-                }}
-              >
-                <div style={{ fontSize: "1.5rem", fontWeight: "bold" }}>
-                  {(() => {
-                    if (res.effectiveness === 0)
-                      return (
-                        <span style={{ color: "#888" }}>
-                          無効（ダメージなし）
-                        </span>
-                      );
-                    if (res.ohkoProb === 100)
-                      return <span style={{ color: "#ef4444" }}>確定1発</span>;
-                    if (res.ohkoProb > 0)
-                      return (
-                        <span style={{ color: "#f59e0b" }}>
-                          乱数1発 ({res.ohkoProb.toFixed(1)}%)
-                        </span>
-                      );
-
-                    // 1発で倒せない場合、倒すのに必要な「最小」の攻撃回数を出す (例: HP100 ÷ 最高58 = 切り上げで2)
-                    const minHits = Math.ceil(res.hp / res.max);
-                    // その攻撃回数で、最低乱数ばかり引いても確実に倒せるかを判定するフラグ (例: 最低49 × 2 = 98 < 100 なのでFalse)
-                    const isGuaranteed = res.min * minHits >= res.hp;
-
-                    return isGuaranteed ? (
-                      <span style={{ color: "#10b981" }}>確定{minHits}発</span>
-                    ) : (
-                      <span style={{ color: "#8b5cf6" }}>乱数{minHits}発</span>
-                    );
-                  })()}
-                </div>
-                <p
-                  style={{
-                    margin: "5px 0 0",
-                    fontSize: "0.9rem",
-                    color: "#888",
-                  }}
-                >
-                  相性倍率: {res.effectiveness}x
-                </p>
-              </div>
-            </>
-          )}
+        {/* 2. ダメージ数値 */}
+        <div style={{ textAlign: "center" }}>
+          <p style={{ fontSize: "0.9rem", color: "#666", marginBottom: "0" }}>ダメージ範囲</p>
+          <h2 style={{ fontSize: "3rem", fontWeight: "900", margin: "5px 0", color: "#1a1a1a" }}>
+            {res.effectiveness === 0 ? "0" : `${Math.max(1, res.min)} 〜 ${Math.max(1, res.max)}`}
+          </h2>
+          <p style={{ fontSize: "1.1rem", fontWeight: "bold", color: "#666" }}>
+            （{((res.min / res.hp) * 100).toFixed(1)}% 〜 {((res.max / res.hp) * 100).toFixed(1)}%）
+          </p>
         </div>
-      </div>
+
+        {/* 3. HPバー */}
+        {res.effectiveness > 0 && <DamageBar hp={res.hp} minDam={res.min} maxDam={res.max} />}
+
+        {/* 4. 確定数エリア（ここが劇的に短くなりました） */}
+        {(() => {
+          const survival = getSurvivalText(res, defItem);
+          return (
+            <div style={{ textAlign: "center", padding: "15px", borderRadius: "12px", backgroundColor: "#f8fafc", marginTop: "10px" }}>
+              <div style={{ fontSize: "1.5rem", fontWeight: "bold", color: survival.color }}>
+                {survival.text}
+                {survival.sub && <span style={{ fontSize: "0.8rem", display: "block", color: "#666" }}>{survival.sub}</span>}
+              </div>
+              <p style={{ margin: "5px 0 0", fontSize: "0.9rem", color: "#888" }}>相性倍率: {res.effectiveness}x</p>
+            </div>
+          );
+        })()}
+      </>
+    )}
+  </div>
+</div>
     </main>
   );
 }

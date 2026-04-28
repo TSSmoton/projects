@@ -248,6 +248,13 @@ export default function PokemonSearch({
     };
   }, [selectedPokemon]);
 
+useEffect(() => {
+  if (focusedIndex >= 0) {
+    const activeItem = document.getElementById(`suggestion-${focusedIndex}`);
+    activeItem?.scrollIntoView({ block: "nearest" });
+  }
+}, [focusedIndex]);
+
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
@@ -363,6 +370,7 @@ export default function PokemonSearch({
           {results.map((m, index) => (
             <li
               key={m.id}
+              id={`suggestion-${index}`} // フォーカス管理のためのID
               onClick={() => {
                 // ★修正ポイント：親に渡す段階で、データの中身ごと和訳してしまう！
                 const translatedPokemon = { ...m, name: translateFormName(m.name) };

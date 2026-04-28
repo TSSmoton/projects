@@ -82,6 +82,13 @@ export default function MoveSearch({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    if (focusedIndex >= 0) {
+      const activeItem = document.getElementById(`move-suggestion-${focusedIndex}`);
+      activeItem?.scrollIntoView({ block: "nearest" });
+    }
+  }, [focusedIndex]);
+
   // 入力時のローカル絞り込み処理（爆速！）
   const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -165,6 +172,7 @@ export default function MoveSearch({
           {filteredMoves.map((m, index) => (
             <li
               key={m.id}
+              id={`move-suggestion-${index}`} // フォーカス管理のためのID
               onClick={() => handleSelect(m)}
               style={{
                 padding: "10px 8px",
