@@ -740,33 +740,85 @@ const getSurvivalText = (res: any, item: any) => {
   const damageList = res.damageList;
   const isRecovery = ["オボンの実", "たべのこし"].includes(item.name);
 
-  // --- 1. 最悪のケース（確定数）を計算 ---
+  // ==========================================
+  // 💀 A. 定数ダメージの事前計算
+  // ==========================================
+  const hasMagicGuard = defAbility === "マジックガード";
+  const isGrounded = defender.type1 !== "ひこう" && defender.type2 !== "ひこう" && defAbility !== "ふゆう";
+
+  // ① 登場時ダメージ（ステロ・まきびし）
+  let entryDamage = 0;
+  if (!hasMagicGuard) {
+    if (isStealthRock) {
+      const rockMod1 = TYPE_CHART["いわ"]?.[defender.type1] ?? 1.0;
+      const rockMod2 = TYPE_CHART["いわ"]?.[defender.type2] ?? 1.0;
+      entryDamage += Math.floor(hp * (1 / 8) * rockMod1 * rockMod2);
+    }
+    if (isGrounded && spikes > 0) {
+      const spikesRate = spikes === 1 ? (1/8) : spikes === 2 ? (1/6) : (1/4);
+      entryDamage += Math.floor(hp * spikesRate);
+    }
+  }
+
+  // ② ターン終了時ダメージ（砂嵐・毒・猛毒）
+  const getTurnEndDamage = (turn: number) => {
+    if (hasMagicGuard) return 0;
+    let dmg = 0;
+
+    // 砂嵐
+    const isSandImmune = ["いわ", "じめん", "はがね"].includes(defender.type1) ||
+                         ["いわ", "じめん", "はがね"].includes(defender.type2) ||
+                         ["ぼうじん", "すなかき", "すなのちから", "すながくれ"].includes(defAbility);
+    if (weather === "sand" && !isSandImmune) {
+      dmg += Math.floor(hp / 16);
+    }
+
+    // 毒・猛毒
+    if (isPoisoned) dmg += Math.floor(hp / 8);
+    if (isBadlyPoisoned) dmg += Math.floor(hp * turn / 16); // 猛毒はターンごとにダメージ増
+
+    return dmg;
+  };
+
+  // ==========================================
+  // ⚔️ B. 最悪のケース（確定数）を計算
+  // ==========================================
+  let startHp = hp - entryDamage;
+  if (startHp <= 0) return { text: "設置技ダメージで瀕死", color: "#ef4444", sub: "" };
+
   const calcMaxHits = () => {
-    let tempHp = hp;
+    let tempHp = startHp;
     let hasUsedBerry = false;
     let h = 0;
-    const minDmg = damageList[0];
-    while (tempHp > 0 && h < 20) { // 最大20発まで追跡
+    const minDmg = damageList[0]; // 最低乱数
+
+    while (tempHp > 0 && h < 20) {
       h++;
       tempHp -= minDmg;
       if (tempHp <= 0) return h;
+
+      // 回復処理
       if (item.name === "オボンの実" && !hasUsedBerry && tempHp <= hp / 2) {
         tempHp = Math.min(hp, tempHp + Math.floor(hp / 4));
         hasUsedBerry = true;
       }
       if (item.name === "たべのこし") tempHp = Math.min(hp, tempHp + Math.floor(hp / 16));
+
+      // スリップダメージ処理
+      tempHp -= getTurnEndDamage(h);
     }
     return h;
   };
 
   const maxHits = calcMaxHits();
 
-  // --- 2. 確率分布をDPで計算（1600万通りを瞬時に処理） ---
-  // Mapのキー: "現在のHP,オボン使用済みか(0 or 1)"
+  // ==========================================
+  // 🎲 C. 確率分布をDPで爆速計算（1600万通り対応）
+  // ==========================================
   let currentStates = new Map<string, number>();
-  currentStates.set(`${hp},0`, 1);
+  currentStates.set(`${startHp},0`, 1); // "現在のHP, オボン使用フラグ"
 
-  let resultProbs = new Array(7).fill(0); // 0〜6発の確率
+  let resultProbs = new Array(7).fill(0);
   let totalPatterns = 1;
 
   for (let h = 1; h <= 6; h++) {
@@ -780,10 +832,12 @@ const getSurvivalText = (res: any, item: any) => {
 
       for (const dmg of damageList) {
         let nextHp = currentHp - dmg;
+
         if (nextHp <= 0) {
-          killsThisTurn += count;
+          killsThisTurn += count; // 直接の攻撃で倒した
         } else {
           let nextBerryUsed = berryUsed;
+          
           // 回復処理
           if (item.name === "オボンの実" && !nextBerryUsed && nextHp <= hp / 2) {
             nextHp = Math.min(hp, nextHp + Math.floor(hp / 4));
@@ -792,46 +846,45 @@ const getSurvivalText = (res: any, item: any) => {
           if (item.name === "たべのこし") {
             nextHp = Math.min(hp, nextHp + Math.floor(hp / 16));
           }
-          const key = `${nextHp},${nextBerryUsed ? 1 : 0}`;
-          nextStates.set(key, (nextStates.get(key) || 0) + count);
+
+          // ターン終了時のスリップダメージ処理
+          nextHp -= getTurnEndDamage(h);
+
+          // スリップダメージで死んだか判定
+          if (nextHp <= 0) {
+            killsThisTurn += count;
+          } else {
+            const key = `${nextHp},${nextBerryUsed ? 1 : 0}`;
+            nextStates.set(key, (nextStates.get(key) || 0) + count);
+          }
         }
       }
     }
     resultProbs[h] = (killsThisTurn / totalPatterns) * 100;
-    // すでに倒した分を次のターンの計算に引き継ぐ
-    if (killsThisTurn > 0) {
-       // 倒せなかった個体だけが次のターンへ
-    }
     currentStates = nextStates;
     if (currentStates.size === 0) break; 
   }
 
-// --- 3. 表示の決定 ---
+  // ==========================================
+  // 🎨 D. 表示テキストの生成
+  // ==========================================
   const itemLabel = isRecovery ? `(${item.name}込み)` : "";
-  
-  // 1〜6発の中で最初に確率が発生したものを探す
   const minHits = resultProbs.findIndex((p, i) => i > 0 && p > 0);
   
-  if (minHits === -1) return { text: "確定7発以上", color: "#6366f1", sub: itemLabel };
+  if (minHits === -1) return { text: `確定7発以上`, color: "#6366f1", sub: itemLabel };
 
   const prob = resultProbs[minHits];
   const diff = maxHits - minHits;
   const maxHitsWarning = diff >= 2 ? ` / 確定${maxHits}発` : "";
 
-  // 💡 確率の表示フォーマットを賢くする（0.0%問題を解決）
+  // 確率の桁数整形 (0.01%の壁対応)
   let probText = "";
-  if (prob >= 99.9) {
-    probText = "100";
-  } else if (prob >= 0.1) {
-    probText = prob.toFixed(1); // 例: 85.4%
-  } else if (prob >= 0.01) {
-    probText = prob.toFixed(2); // 例: 0.04%
-  } else {
-    probText = "<0.01"; // 1万分の1以下の超低確率
-  }
+  if (prob >= 99.9) probText = "100";
+  else if (prob >= 0.1) probText = prob.toFixed(1);
+  else if (prob >= 0.01) probText = prob.toFixed(2);
+  else probText = "<0.01";
 
-  // ほぼ100%（99.9%以上）なら確定扱い
-  if (prob >= 99.9) { 
+  if (prob >= 99.9) {
     return { text: `確定${minHits}発`, color: "#10b981", sub: itemLabel };
   }
 
@@ -1540,14 +1593,70 @@ const getSurvivalText = (res: any, item: any) => {
                 ))}
               </div>
             </div>
-            <label style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: "5px", fontSize: "0.8rem", fontWeight: "bold" }}>
-            <input type="checkbox" checked={isStealthRock} onChange={(e) => setIsStealthRock(e.target.checked)} />
-            🪨 ステルスロック
-            </label>
-            {/* <label style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: "5px", fontSize: "0.8rem", fontWeight: "bold" }}>
-            <input type="checkbox" checked={isSpikes} onChange={(e) => setIsSpikes(e.target.checked)} />
-            ✹ まきびし
-          </label> */}
+<div style={{ borderTop: "1px solid #eee", paddingTop: "10px", marginTop: "5px" }}>
+              <span style={{ fontWeight: "bold", fontSize: "0.9rem", display: "block", marginBottom: "8px" }}>🪨 設置技・状態異常</span>
+              
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "0.8rem" }}>
+                
+                {/* ステルスロック */}
+                <label style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                  <input
+                    type="checkbox"
+                    checked={isStealthRock}
+                    onChange={(e) => setIsStealthRock(e.target.checked)}
+                  />
+                  ステルスロック
+                </label>
+
+                {/* まきびし */}
+                <div style={{ display: "flex", alignItems: "center", gap: "5px", flexWrap: "wrap" }}>
+                  <span style={{ color: "#555" }}>まきびし:</span>
+                  {[0, 1, 2, 3].map((num) => (
+                    <label key={`spikes-${num}`} style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: "2px" }}>
+                      <input
+                        type="radio"
+                        name="spikes"
+                        value={num}
+                        checked={spikes === num}
+                        onChange={() => setSpikes(num)}
+                      />
+                      {num}回
+                    </label>
+                  ))}
+                </div>
+
+                {/* 毒状態（排他選択） */}
+                <div style={{ display: "flex", alignItems: "center", gap: "5px", flexWrap: "wrap" }}>
+                  <span style={{ color: "#555" }}>毒状態:</span>
+                  <label style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: "2px" }}>
+                    <input 
+                      type="radio" 
+                      name="poison" 
+                      checked={!isPoisoned && !isBadlyPoisoned} 
+                      onChange={() => { setIsPoisoned(false); setIsBadlyPoisoned(false); }} 
+                    /> なし
+                  </label>
+                  <label style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: "2px" }}>
+                    <input 
+                      type="radio" 
+                      name="poison" 
+                      checked={isPoisoned} 
+                      onChange={() => { setIsPoisoned(true); setIsBadlyPoisoned(false); }} 
+                    /> 毒
+                  </label>
+                  <label style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: "2px" }}>
+                    <input 
+                      type="radio" 
+                      name="poison" 
+                      checked={isBadlyPoisoned} 
+                      onChange={() => { setIsPoisoned(false); setIsBadlyPoisoned(true); }} 
+                    /> 猛毒
+                  </label>
+                </div>
+
+              </div>
+            </div>
+            
           </div>
         </div>
 
