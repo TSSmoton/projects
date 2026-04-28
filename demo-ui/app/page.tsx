@@ -450,6 +450,12 @@ export default function Home() {
   const [weather, setWeather] = useState("none"); // none, sun, rain, sand, snow
   const [terrain, setTerrain] = useState("none"); // none, electric, grassy, misty, psychic
 
+  // ステルスロック・まきびしの有無
+  const [isStealthRock, setIsStealthRock] = useState(false);
+const [spikes, setSpikes] = useState(0); // まきびし (0〜3)
+  const [isPoisoned, setIsPoisoned] = useState(false); // どくびし1回 (通常の毒)
+  const [isBadlyPoisoned, setIsBadlyPoisoned] = useState(false); // どくびし2回 (猛毒/どくどく)
+
   // ランク補正のState（-6 〜 +6）
   const [atkRank, setAtkRank] = useState(0);
   const [defRank, setDefRank] = useState(0);
@@ -517,29 +523,6 @@ export default function Home() {
   };
 
 
-//   const simulateSurvival = (hp: number, damage: number, item: string) => {
-//   let currentHp = hp;
-//   let hits = 0;
-  
-//   while (currentHp > 0 && hits < 10) { // 最大10発まで計算
-//     hits++;
-//     currentHp -= damage; // 1発受ける
-    
-//     if (currentHp <= 0) break; // 倒れた
-
-//     // オボンの実（HP半分以下で25%回復）
-//     if (item === "オボンの実" && currentHp <= hp / 2) {
-//       currentHp = Math.min(hp, currentHp + Math.floor(hp / 4));
-//       item = "消費済み"; // 1回きり
-//     }
-    
-//     // 食べ残し（毎ターン 1/16 回復）
-//     if (item === "たべのこし") {
-//       currentHp = Math.min(hp, currentHp + Math.floor(hp / 16));
-//     }
-//   }
-//   return hits; // 何発耐えたか
-// };
 
   
   /**
@@ -596,7 +579,18 @@ const calculateResult = () => {
 
     // 0. 技の「威力 (Power)」の計算
     let currentPower = selectedMove.power;
+    let currentMoveType = selectedMove.type; // 👈 今後はこれを使います
 
+    // 💡 ウェザーボールの動的変化
+    if (selectedMove.name === "ウェザーボール" && weather !== "none") {
+      currentPower = 100; // 天候があれば威力2倍
+      if (weather === "sun") currentMoveType = "ほのお";
+      if (weather === "rain") currentMoveType = "みず";
+      if (weather === "sand") currentMoveType = "いわ";
+      if (weather === "snow") currentMoveType = "こおり";
+    }
+  
+  
     const hasFairyAura = atkAbility === "フェアリーオーラ" || defAbility === "フェアリーオーラ";
     const hasAuraBreak = atkAbility === "オーラブレイク" || defAbility === "オーラブレイク";
     if (hasFairyAura && selectedMove.type === "フェアリー") {
@@ -606,9 +600,9 @@ const calculateResult = () => {
 
     const isAtkGrounded = attacker.type1 !== "ひこう" && attacker.type2 !== "ひこう" && atkAbility !== "ふゆう";
     if (isAtkGrounded) {
-      if (terrain === "electric" && selectedMove.type === "でんき") currentPower = Math.floor(currentPower * 1.3);
-      else if (terrain === "grassy" && selectedMove.type === "くさ") currentPower = Math.floor(currentPower * 1.3);
-      else if (terrain === "psychic" && selectedMove.type === "エスパー") currentPower = Math.floor(currentPower * 1.3);
+      if (terrain === "electric" && currentMoveType === "でんき") currentPower = Math.floor(currentPower * 1.3);
+      else if (terrain === "grassy" && currentMoveType === "くさ") currentPower = Math.floor(currentPower * 1.3);
+      else if (terrain === "psychic" && currentMoveType === "エスパー") currentPower = Math.floor(currentPower * 1.3);
     }
     if (terrain === "grassy" && ["じしん", "じならし", "マグニチュード"].includes(selectedMove.name)) {
       currentPower = Math.floor(currentPower * 0.5);
@@ -642,20 +636,20 @@ const calculateResult = () => {
     let baseDamage = Math.floor(Math.floor((Math.floor((2 * 50) / 5 + 2) * currentPower * a) / d) / 50 + 2);
 
     if (weather === "sun") {
-      if (selectedMove.type === "ほのお") baseDamage = Math.floor(baseDamage * 1.5);
-      if (selectedMove.type === "みず") baseDamage = Math.floor(baseDamage * 0.5);
+      if (currentMoveType === "ほのお") baseDamage = Math.floor(baseDamage * 1.5);
+      if (currentMoveType === "みず") baseDamage = Math.floor(baseDamage * 0.5);
     } else if (weather === "rain") {
-      if (selectedMove.type === "みず") baseDamage = Math.floor(baseDamage * 1.5);
-      if (selectedMove.type === "ほのお") baseDamage = Math.floor(baseDamage * 0.5);
+      if (currentMoveType === "みず") baseDamage = Math.floor(baseDamage * 1.5);
+      if (currentMoveType === "ほのお") baseDamage = Math.floor(baseDamage * 0.5);
     }
 
     const isDefGrounded = defender.type1 !== "ひこう" && defender.type2 !== "ひこう" && defAbility !== "ふゆう";
-    if (terrain === "misty" && selectedMove.type === "ドラゴン" && isDefGrounded) {
+    if (terrain === "misty" && currentMoveType === "ドラゴン" && isDefGrounded) {
       baseDamage = Math.floor(baseDamage * 0.5);
     }
 
     // 4. 乱数展開 ＆ 相性判定
-    const stabMod = (selectedMove.type === attacker.type1 || selectedMove.type === attacker.type2)
+    const stabMod = (currentMoveType === attacker.type1 || currentMoveType === attacker.type2)
         ? (atkAbility === "てきおうりょく" ? 2.0 : 1.5) : 1.0;
 
     const getTypeMultiplier = (mType, tType, abil) => {
@@ -665,11 +659,11 @@ const calculateResult = () => {
       return m;
     };
 
-    const type1Mod = getTypeMultiplier(selectedMove.type, defender.type1, atkAbility);
-    const type2Mod = getTypeMultiplier(selectedMove.type, defender.type2, atkAbility);
+    const type1Mod = getTypeMultiplier(currentMoveType, defender.type1, atkAbility);
+    const type2Mod = getTypeMultiplier(currentMoveType, defender.type2, atkAbility);
     let effectiveness = type1Mod * type2Mod;
 
-    if (defAbility === "ふゆう" && selectedMove.type === "じめん" && atkAbility !== "かたやぶり") effectiveness = 0;
+    if (defAbility === "ふゆう" && currentMoveType === "じめん" && atkAbility !== "かたやぶり") effectiveness = 0;
 
     const damageList = [];
     for (let i = 85; i <= 100; i++) {
@@ -1439,8 +1433,18 @@ const getSurvivalText = (res: any, item: any) => {
           )}
         </section>
 
-        {/* ここに入れ替えボタンを配置！ */}
-        <div style={{ display: "flex", justifyContent: "center" }}>
+{/* === 中央エリア（入れ替えボタン ＆ 天候・フィールド） === */}
+        <div 
+          style={{ 
+            display: "flex", 
+            flexDirection: "column", // 縦並びにする
+            alignItems: "center",    // 中央寄せ
+            justifyContent: "center", 
+            gap: "20px",             // ボタンとパネルの間の隙間
+            width: "10%",            // 必要に応じて幅を調整
+          }}
+        >
+          {/* 入れ替えボタン */}
           <button
             onClick={handleSwap}
             title="攻撃と防御を入れ替える"
@@ -1473,70 +1477,77 @@ const getSurvivalText = (res: any, item: any) => {
           >
             ⇄
           </button>
-        </div>
 
-        {/* 天候・フィールド設定エリア */}
-        <div
-          style={{
-            width: "13%",
-            backgroundColor: "#fff",
-            padding: "15px",
-            borderRadius: "10px",
-            boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
-            display: "flex",
-            justifyContent: "space-around",
-            flexWrap: "wrap",
-            gap: "10px",
-          }}
-        >
-          {/* 天候 */}
-          <div>
-            <span style={{ fontWeight: "bold", fontSize: "0.9rem", display: "block", marginBottom: "5px" }}>☀️ 天候</span>
-            <div style={{ display: "flex", gap: "5px", fontSize: "0.8rem", flexWrap: "wrap" }}>
-              {[
-                { label: "なし", value: "none" },
-                { label: "晴れ", value: "sun" },
-                { label: "雨", value: "rain" },
-                { label: "砂嵐", value: "sand" },
-                { label: "雪", value: "snow" },
-              ].map((w) => (
-                <label key={w.value} style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: "2px" }}>
-                  <input
-                    type="radio"
-                    name="weather"
-                    value={w.value}
-                    checked={weather === w.value}
-                    onChange={(e) => setWeather(e.target.value)}
-                  />
-                  {w.label}
-                </label>
-              ))}
+          {/* 天候・フィールド設定エリア */}
+          <div
+            style={{
+              width: "100%", // 親コンテナの幅に合わせる
+              backgroundColor: "#fff",
+              padding: "15px",
+              borderRadius: "10px",
+              boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
+              display: "flex",
+              flexDirection: "column", // 中の天候とフィールドも縦に並べるならこちら
+              gap: "10px",
+            }}
+          >
+            {/* 天候 */}
+            <div>
+              <span style={{ fontWeight: "bold", fontSize: "0.9rem", display: "block", marginBottom: "5px" }}>☀️ 天候</span>
+              <div style={{ display: "flex", gap: "5px", fontSize: "0.8rem", flexWrap: "wrap" }}>
+                {[
+                  { label: "なし", value: "none" },
+                  { label: "晴れ", value: "sun" },
+                  { label: "雨", value: "rain" },
+                  { label: "砂嵐", value: "sand" },
+                  { label: "雪", value: "snow" },
+                ].map((w) => (
+                  <label key={w.value} style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: "2px" }}>
+                    <input
+                      type="radio"
+                      name="weather"
+                      value={w.value}
+                      checked={weather === w.value}
+                      onChange={(e) => setWeather(e.target.value)}
+                    />
+                    {w.label}
+                  </label>
+                ))}
+              </div>
             </div>
-          </div>
 
-          {/* フィールド */}
-          <div>
-            <span style={{ fontWeight: "bold", fontSize: "0.9rem", display: "block", marginBottom: "5px" }}>🌱 フィールド</span>
-            <div style={{ display: "flex", gap: "5px", fontSize: "0.8rem", flexWrap: "wrap" }}>
-              {[
-                { label: "なし", value: "none" },
-                { label: "エレキ", value: "electric" },
-                { label: "グラス", value: "grassy" },
-                { label: "ミスト", value: "misty" },
-                { label: "サイコ", value: "psychic" },
-              ].map((t) => (
-                <label key={t.value} style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: "2px" }}>
-                  <input
-                    type="radio"
-                    name="terrain"
-                    value={t.value}
-                    checked={terrain === t.value}
-                    onChange={(e) => setTerrain(e.target.value)}
-                  />
-                  {t.label}
-                </label>
-              ))}
+            {/* フィールド */}
+            <div>
+              <span style={{ fontWeight: "bold", fontSize: "0.9rem", display: "block", marginBottom: "5px" }}>🌱 フィールド</span>
+              <div style={{ display: "flex", gap: "5px", fontSize: "0.8rem", flexWrap: "wrap" }}>
+                {[
+                  { label: "なし", value: "none" },
+                  { label: "エレキ", value: "electric" },
+                  { label: "グラス", value: "grassy" },
+                  { label: "ミスト", value: "misty" },
+                  { label: "サイコ", value: "psychic" },
+                ].map((t) => (
+                  <label key={t.value} style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: "2px" }}>
+                    <input
+                      type="radio"
+                      name="terrain"
+                      value={t.value}
+                      checked={terrain === t.value}
+                      onChange={(e) => setTerrain(e.target.value)}
+                    />
+                    {t.label}
+                  </label>
+                ))}
+              </div>
             </div>
+            <label style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: "5px", fontSize: "0.8rem", fontWeight: "bold" }}>
+            <input type="checkbox" checked={isStealthRock} onChange={(e) => setIsStealthRock(e.target.checked)} />
+            🪨 ステルスロック
+            </label>
+            {/* <label style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: "5px", fontSize: "0.8rem", fontWeight: "bold" }}>
+            <input type="checkbox" checked={isSpikes} onChange={(e) => setIsSpikes(e.target.checked)} />
+            ✹ まきびし
+          </label> */}
           </div>
         </div>
 
