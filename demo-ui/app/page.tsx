@@ -735,6 +735,7 @@ const getBadgeStyle = (prob: number) => {
 
 
 const getSurvivalText = (res: any, item: any) => {
+  if (!defender) return { text: "", color: "#888" };
   if (res.effectiveness === 0) return { text: "無効", color: "#888" };
 
   const hp = res.hp;
