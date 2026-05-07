@@ -753,7 +753,8 @@ const getSurvivalText = (res: any, item: any) => {
   if (!hasMagicGuard) {
     if (isStealthRock) {
       const rockMod1 = TYPE_CHART["いわ"]?.[defender.type1] ?? 1.0;
-      const rockMod2 = TYPE_CHART["いわ"]?.[defender.type2] ?? 1.0;
+      // const rockMod2 = TYPE_CHART["いわ"]?.[defender.type2] ?? 1.0;
+      const rockMod2 = defender.type2 ? (TYPE_CHART["いわ"]?.[defender.type2] ?? 1.0) : 1.0;
       entryDamage += Math.floor(hp * (1 / 8) * rockMod1 * rockMod2);
     }
     if (isGrounded && spikes > 0) {
