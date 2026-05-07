@@ -968,15 +968,6 @@ const getSurvivalText = (res: any, item: any) => {
                 }}
               >
                 {/* 攻撃側の画像表示 */}
-                {/* <img
-                src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${attacker.id}.png`}
-                alt={attacker.name}
-                style={{
-                  width: "50px",
-                  height: "50px",
-                  marginBottom: "10px",
-                }}
-              /> */}
                 {/* 外部サイトではなく、自前の /public/pokemon/ フォルダから読み込む */}
                 <Image
                   src={`/pokemon/${attacker.id}.png`}
