@@ -57,7 +57,14 @@ const TYPE_CHART: Record<string, Record<string, number>> = {
     ドラゴン: 0.5,
     はがね: 2,
   },
-  みず: { ほのお: 2, みず: 0.5, くさ: 0.5, じめん: 2, いわ: 2, ドラゴン: 0.5 },
+  みず: {
+    ほのお: 2,
+    みず: 0.5,
+    くさ: 0.5,
+    じめん: 2,
+    いわ: 2,
+    ドラゴン: 0.5
+  },
   でんき: {
     みず: 2,
     でんき: 0.5,
@@ -128,16 +135,22 @@ const TYPE_CHART: Record<string, Record<string, number>> = {
     いわ: 0.5,
     はがね: 0.5,
   },
-  エスパー: { かくとう: 2, どく: 2, エスパー: 0.5, あく: 0, はがね: 0.5 },
+  エスパー: {
+    かくとう: 2,
+    どく: 2,
+    エスパー: 0.5,
+    あく: 0,
+    はがね: 0.5
+  },
   むし: {
-    ほのお: 0.5,
+    あく: 2,
+    エスパー: 2,
     くさ: 2,
+    ほのお: 0.5,
     かくとう: 0.5,
     どく: 0.5,
     ひこう: 0.5,
-    エスパー: 2,
     ゴースト: 0.5,
-    あく: 2,
     はがね: 0.5,
     フェアリー: 0.5,
   },
@@ -660,11 +673,17 @@ const calculateResult = () => {
       return m;
     };
 
-    const type1Mod = getTypeMultiplier(currentMoveType, defender.type1, atkAbility);
-    const type2Mod = getTypeMultiplier(currentMoveType, defender.type2, atkAbility);
-    let effectiveness = type1Mod * type2Mod;
+    
+  const type1Mod = getTypeMultiplier(currentMoveType, defender.type1, atkAbility);
+    
+  const type2Mod = getTypeMultiplier(currentMoveType, defender.type2, atkAbility);
+   
+  let effectiveness = type1Mod * type2Mod;
 
-    if (defAbility === "ふゆう" && currentMoveType === "じめん" && atkAbility !== "かたやぶり") effectiveness = 0;
+  if (defAbility === "ふゆう" && currentMoveType === "じめん" && atkAbility !== "かたやぶり") effectiveness = 0;
+    
+  // ほのお・こおり技に対するあついしぼうの半減効果を追加
+  if (defAbility === "あついしぼう" && (currentMoveType === "ほのお" || currentMoveType === "こおり")) effectiveness = effectiveness * 0.5;
 
     const damageList = [];
     for (let i = 85; i <= 100; i++) {

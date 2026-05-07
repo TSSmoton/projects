@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
 // ✅ ここで api.ts から本物の関数を読み込む
-import { getMovesByPokemonId } from "../services/api";
+import { getMovesByPokemonId, searchMoves } from "../services/api";
 
 // 技のデータ型（バックエンドの Move.java の構造に合わせます）
 interface Move {
@@ -36,7 +36,7 @@ export default function MoveSearch({
   //   }
   // }, [selectedIndex]);
 
-  // ✅ ここがメイン！ポケモンが選ばれたら、DBから本物の技リストを取得する
+  // ポケモンが選ばれたら、DBから本物の技リストを取得する
   useEffect(() => {
     let isMounted = true; // 画面切り替え時のエラーを防ぐおまじない
 
@@ -89,7 +89,40 @@ export default function MoveSearch({
     }
   }, [focusedIndex]);
 
-  // 入力時のローカル絞り込み処理（爆速！）
+
+// 手入力でEnterを押した時の強制検索ロジック（完全防弾仕様）
+  const handleManualSubmit = async (inputText: string) => {
+    // 1. まずは「覚える技リスト(availableMoves)」の中に完全一致があればそれをセット
+    const localMatch = availableMoves.find((m) => m.name === inputText);
+    if (localMatch) {
+      handleSelect(localMatch);
+      return;
+    }
+
+    // 2. 覚える技になければ、API経由で「全技DB」から探す！
+    try {
+      const results = await searchMoves(inputText);
+      
+      // 💡 修正ポイント1: APIが配列で返してこなかった場合（1件だけのデータ等）でも強制的に配列にする
+      const resultsArray = Array.isArray(results) ? results : [results];
+      const exactMatch = resultsArray.find((m: Move) => m && m.name === inputText);
+      
+      if (exactMatch) {
+        // 見つかったら強制セット！
+        handleSelect(exactMatch);
+      } else {
+        alert(`「${inputText}」という技はデータベースに見つかりませんでした。`);
+      }
+    } catch (error) {
+      console.error(error);
+      // 💡 修正ポイント2: 404エラー（見つからない）で例外に飛んだ場合も想定する
+      alert(`「${inputText}」を取得できませんでした。（DBに無いか、サーバーがスリープ中の可能性があります）`);
+    }
+  };
+
+
+
+  // 入力時のローカル絞り込み処理
   const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setQuery(val);
@@ -105,22 +138,28 @@ export default function MoveSearch({
     }
   };
 
-  // キーボード操作（上下キーとEnterで選べるようにする）
+// キーボード操作（Enterを押した時の処理を強化）
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (!isOpen || filteredMoves.length === 0) return;
+    if (query.trim().length === 0) return;
 
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setFocusedIndex((prev) =>
-        prev < filteredMoves.length - 1 ? prev + 1 : prev,
-      );
+      if (isOpen && filteredMoves.length > 0) {
+        setFocusedIndex((prev) => prev < filteredMoves.length - 1 ? prev + 1 : prev);
+      }
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setFocusedIndex((prev) => (prev > 0 ? prev - 1 : 0));
+      if (isOpen && filteredMoves.length > 0) {
+        setFocusedIndex((prev) => (prev > 0 ? prev - 1 : 0));
+      }
     } else if (e.key === "Enter") {
       e.preventDefault();
-      if (focusedIndex >= 0 && focusedIndex < filteredMoves.length) {
+      // サジェストから選んでいる場合
+      if (isOpen && focusedIndex >= 0 && focusedIndex < filteredMoves.length) {
         handleSelect(filteredMoves[focusedIndex]);
+      } else {
+        // サジェストを選ばずに、文字を打ってそのままEnterを押した場合
+        handleManualSubmit(query.trim());
       }
     }
   };
