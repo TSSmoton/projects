@@ -770,7 +770,7 @@ const getSurvivalText = (res: any, item: any) => {
 
     // 砂嵐
     const isSandImmune = ["いわ", "じめん", "はがね"].includes(defender.type1) ||
-                         ["いわ", "じめん", "はがね"].includes(defender.type2) ||
+                         ["いわ", "じめん", "はがね"].includes(defender.type2 || "") ||
                          ["ぼうじん", "すなかき", "すなのちから", "すながくれ"].includes(defAbility);
     if (weather === "sand" && !isSandImmune) {
       dmg += Math.floor(hp / 16);
