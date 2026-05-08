@@ -131,6 +131,16 @@ const FORM_DICTIONARY: Record<string, string> = {
   // --- ピカチュウ・イーブイの相棒 ---
   starter: "相棒",
 
+  // --- イダイトウfemale用 ---
+  female: "メスのすがた",
+
+  // --- ポワルン用 ---
+  sunny: "ひざしのすがた",
+  rainy: "あまぐものすがた",
+  snowy: "ゆきぐものすがた",
+
+  // --- その他の特殊なフォルム ---
+
   // --- ゲッコウガ・その他 ---
   "battle-bond": "きずなへんげ", // 変身前のゲッコウガ
   "own-tempo": "マイペース", // イワンコ（たそがれ進化用）
@@ -178,7 +188,7 @@ const translateFormName = (rawName: string): string => {
 const convertQueryForAPI = (userInput: string): string => {
   let apiQuery = userInput;
 
-  // DBがおそらく日本語に対応しておらず、英語で探す必要がある「特殊なフォルム」だけをリストアップ
+  // 検索用に、ユーザーが入力した日本語を英語に変換する
   const SPECIFIC_REVERSE_DICT: Record<string, string> = {
     "きずな": "battle-bond",
     "きずなへんげ": "battle-bond",
@@ -209,6 +219,7 @@ const convertQueryForAPI = (userInput: string): string => {
     "ワールド": "world-cap",
     "ワールドキャップ": "world-cap",
     "相棒": "starter",
+    "メスのすがた": "female",
   };
 
   // 上のリストにある言葉が入力された時"だけ"、裏で英語に変換する
