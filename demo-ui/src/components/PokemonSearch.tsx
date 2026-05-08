@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { searchPokemon } from "../services/api";
 
-interface Pokemon {
+export interface Pokemon {
   id: number;
   name: string;
   hp: number;
@@ -23,8 +23,8 @@ interface Pokemon {
 interface PokemonSearchProps {
   label: string;
   onSelect: (pokemon: Pokemon) => void;
-    // 親から「いま選ばれているポケモン」を受け取る
-    selectedPokemon?: Pokemon | null;
+  // 親から「いま選ばれているポケモン」を受け取る
+  selectedPokemon?: Pokemon | null;
 }
 
 // ==========================================
@@ -222,10 +222,14 @@ const convertQueryForAPI = (userInput: string): string => {
     "メスのすがた": "female",
   };
 
-  // 上のリストにある言葉が入力された時"だけ"、裏で英語に変換する
-  for (const [jp, en] of Object.entries(SPECIFIC_REVERSE_DICT)) {
+  // 💡 【重要】バグ防止：文字数が「長い」言葉から順番にチェックする！
+  // 理由：「サトシゲッコウガ」の前に「サトシ」で置換されると「ashゲッコウガ」になりAPIが失敗するため。
+  const sortedKeys = Object.keys(SPECIFIC_REVERSE_DICT).sort((a, b) => b.length - a.length);
+
+  for (const jp of sortedKeys) {
     if (apiQuery.includes(jp)) {
-      apiQuery = apiQuery.replace(jp, en);
+      apiQuery = apiQuery.replace(jp, SPECIFIC_REVERSE_DICT[jp]);
+      break; // 1つ置換したら終了
     }
   }
 
@@ -241,9 +245,19 @@ export default function PokemonSearch({
   const [results, setResults] = useState<Pokemon[]>([]);
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const [isOpen, setIsOpen] = useState(false);
+  
   const wrapperRef = useRef<HTMLDivElement>(null);
   const searchTicket = useRef(0);
+  const typingTimer = useRef<NodeJS.Timeout | null>(null);
 
+  // 💡 【追加】メモリリーク防止：コンポーネントが破棄される時にタイマーを掃除する
+  useEffect(() => {
+    return () => {
+      if (typingTimer.current) clearTimeout(typingTimer.current);
+    };
+  }, []);
+
+  // 親から渡されたポケモンが切り替わったら、入力欄もそれに合わせる
   useEffect(() => {
     let isMounted = true;
     const syncQuery = async () => {
@@ -259,13 +273,15 @@ export default function PokemonSearch({
     };
   }, [selectedPokemon]);
 
-useEffect(() => {
-  if (focusedIndex >= 0) {
-    const activeItem = document.getElementById(`suggestion-${focusedIndex}`);
-    activeItem?.scrollIntoView({ block: "nearest" });
-  }
-}, [focusedIndex]);
+  // キーボードの上下でリストをスクロールさせる処理
+  useEffect(() => {
+    if (focusedIndex >= 0) {
+      const activeItem = document.getElementById(`suggestion-${focusedIndex}`);
+      activeItem?.scrollIntoView({ block: "nearest" });
+    }
+  }, [focusedIndex]);
 
+  // 検索窓の外をクリックしたらリストを閉じる
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
@@ -277,6 +293,20 @@ useEffect(() => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
+
+  // ----------------------------------------------------
+  // 💡 【追加】決定時の共通ロジック（重複コードの排除）
+  // ----------------------------------------------------
+  const handleDecide = (pokemon: Pokemon) => {
+    // 親に渡す段階で、データの中身ごと完全に和訳してしまう
+    const translatedPokemon = { ...pokemon, name: translateFormName(pokemon.name) };
+    onSelect(translatedPokemon);
+    setQuery(translatedPokemon.name);
+    setResults([]);
+    setFocusedIndex(-1);
+    setIsOpen(false);
+    searchTicket.current += 1;
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!isOpen || results.length === 0) return;
@@ -290,43 +320,27 @@ useEffect(() => {
     } else if (e.key === "Enter") {
       e.preventDefault();
       if (focusedIndex >= 0 && focusedIndex < results.length) {
-        const selected = results[focusedIndex];
-        
-        // ★修正ポイント：親に渡す段階で、データの中身ごと和訳してしまう！
-        const translatedPokemon = { ...selected, name: translateFormName(selected.name) };
-
-        onSelect(translatedPokemon);
-        setQuery(translatedPokemon.name);
-        setResults([]);
-        setFocusedIndex(-1);
-        setIsOpen(false);
-        searchTicket.current += 1;
+        handleDecide(results[focusedIndex]); // 共通関数を呼び出す
       }
     }
   };
 
-// ★追加：タイマーを記憶するための変数（useStateの下あたりに追加）
-  const typingTimer = useRef<NodeJS.Timeout | null>(null);
-
-  // ----------------------------------------------------
-  // handleInputを丸ごとこれに差し替え！
-  // ----------------------------------------------------
+  // 入力時の処理（API連打を防ぐデバウンス処理）
   const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setQuery(val);
     setFocusedIndex(-1);
     setIsOpen(true);
 
-    // ★魔法：入力があるたびに、前のタイマーをキャンセルする（連打防止）
     if (typingTimer.current) {
       clearTimeout(typingTimer.current);
     }
 
     if (val.length > 0) {
-      // ★魔法：ユーザーが「0.3秒間」入力を止めたら、初めてAPIを叩く
+      // ユーザーが「0.3秒間」入力を止めたら、初めてAPIを叩く
       typingTimer.current = setTimeout(async () => {
         const currentTicket = ++searchTicket.current;
-        const apiSearchTerm = convertQueryForAPI(val); // 逆翻訳
+        const apiSearchTerm = convertQueryForAPI(val); // 裏で英語に戻す
 
         try {
           const data = await searchPokemon(apiSearchTerm);
@@ -336,7 +350,7 @@ useEffect(() => {
         } catch (err) {
           console.error("検索エラー:", err);
         }
-      }, 300); // 300ミリ秒（0.3秒）待つ
+      }, 300);
     } else {
       setResults([]);
     }
@@ -381,18 +395,8 @@ useEffect(() => {
           {results.map((m, index) => (
             <li
               key={m.id}
-              id={`suggestion-${index}`} // フォーカス管理のためのID
-              onClick={() => {
-                // ★修正ポイント：親に渡す段階で、データの中身ごと和訳してしまう！
-                const translatedPokemon = { ...m, name: translateFormName(m.name) };
-
-                onSelect(translatedPokemon);
-                setQuery(translatedPokemon.name);
-                setResults([]);
-                setFocusedIndex(-1);
-                setIsOpen(false);
-                searchTicket.current += 1;
-              }}
+              id={`suggestion-${index}`}
+              onClick={() => handleDecide(m)} // 共通関数を呼び出す
               style={{
                 padding: "8px",
                 cursor: "pointer",

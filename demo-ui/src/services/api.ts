@@ -1,42 +1,48 @@
-// 修正前（自分のPC）
-// const API_BASE_URL = "http://localhost:8080/api";
-
-// 修正後（インターネット上のRenderを探しに行く！）
-// const API_BASE_URL = "https://projects-cskf.onrender.com/api";
-
-// 開発中（localhost）なら8080を、本番環境ならRenderのURLを自動で使う魔法の設定
+// 開発中（localhost）と本番環境（Render等のクラウド）で、通信先のURLを自動で切り替える設定
 const API_BASE_URL = process.env.NODE_ENV === "production" 
   ? "https://projects-cskf.onrender.com/api"
   : "http://localhost:8080/api";
 
-// ポケモン検索用
+/**
+ * データベースからポケモンの名前であいまい検索を行います。
+ * @param name 検索したいポケモン名（例: "フシギ"）
+ * @returns 一致したポケモンの配列
+ */
 export const searchPokemon = async (name: string) => {
   const response = await fetch(
     `${API_BASE_URL}/pokemon/search?name=${encodeURIComponent(name)}`,
   );
-  if (!response.ok) throw new Error("Network response was not ok");
+  if (!response.ok) throw new Error("ポケモンの検索に失敗しました");
   return response.json();
 };
 
-// 技検索用
+/**
+ * データベースから技の名前であいまい検索を行います。
+ * @param name 検索したい技名（例: "じしん"）
+ * @returns 一致した技の配列
+ */
 export const searchMoves = async (name: string) => {
   const response = await fetch(
     `${API_BASE_URL}/move/search?name=${encodeURIComponent(name)}`,
   );
-  if (!response.ok) throw new Error("Network response was not ok");
+  if (!response.ok) throw new Error("技の検索に失敗しました");
   return response.json();
 };
-// ポケモンIDから、そのポケモンが覚える技リストを取得する関数
+
+/**
+ * 指定したポケモンのIDから、そのポケモンが覚える「すべての技」を取得します。
+ * @param pokemonId 技を取得したいポケモンのID
+ * @returns そのポケモンが覚える技の配列（エラー時は空配列）
+ */
 export const getMovesByPokemonId = async (pokemonId: number) => {
   try {
-    // Spring BootのAPIを叩く
     const response = await fetch(`${API_BASE_URL}/move/pokemon/${pokemonId}`);
     if (!response.ok) {
       throw new Error("技データの取得に失敗しました");
     }
     return await response.json();
   } catch (error) {
-    console.error(error);
-    return []; // エラー時は空っぽのリストを返す
+    console.error("APIエラー:", error);
+    return []; // 画面をクラッシュさせないための安全策
   }
 };

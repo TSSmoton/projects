@@ -1,40 +1,37 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
-// ✅ ここで api.ts から本物の関数を読み込む
 import { getMovesByPokemonId, searchMoves } from "../services/api";
 
-// 技のデータ型（バックエンドの Move.java の構造に合わせます）
-interface Move {
+// 💡 バックエンドのMoveエンティティに合わせた型定義
+// 親のHome.tsxで表示や計算に使うため、accuracyとeffectも持たせておきます
+export interface Move {
   id: number;
   name: string;
   type: string;
   category: "物理" | "特殊" | "変化";
   power: number;
+  accuracy?: number; 
+  effect?: string;   
 }
 
-export default function MoveSearch({
-  onSelect,
-  selectedPokemonId, // 選ばれているポケモンのID
-}: {
+interface MoveSearchProps {
   onSelect: (move: Move) => void;
-  selectedPokemonId?: number;
-}) {
+  selectedPokemonId?: number; // 今選ばれているポケモンのID
+}
+
+export default function MoveSearch({ onSelect, selectedPokemonId }: MoveSearchProps) {
   const [query, setQuery] = useState("");
-  const [availableMoves, setAvailableMoves] = useState<Move[]>([]); // そのポケモンが覚える全技リスト
-  const [filteredMoves, setFilteredMoves] = useState<Move[]>([]); // 絞り込み後のリスト
-  const [isOpen, setIsOpen] = useState(false); // ドロップダウンの開閉状態
+  const [availableMoves, setAvailableMoves] = useState<Move[]>([]);
+  const [filteredMoves, setFilteredMoves] = useState<Move[]>([]);
+  const [isOpen, setIsOpen] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const wrapperRef = useRef<HTMLDivElement>(null);
-  // 「現在選択されているリストの項目」を記憶するための箱
-  const selectedItemRef = useRef<HTMLLIElement | null>(null);
 
-
-  // ポケモンが選ばれたら、DBから本物の技リストを取得する
+  // 1. ポケモンが選択されたら、そのポケモンが覚える全技を取得する
   useEffect(() => {
-    let isMounted = true; // 画面切り替え時のエラーを防ぐおまじない
+    let isMounted = true;
 
     const fetchPokemonMoves = async () => {
-      // ポケモンがまだ選ばれていなければ空っぽにする
       if (!selectedPokemonId) {
         if (isMounted) {
           setAvailableMoves([]);
@@ -43,31 +40,22 @@ export default function MoveSearch({
         return;
       }
 
-      // 💥 ダミーデータを消し、さっき作ったAPI関数でDBから本物のデータを取得！
       const data = await getMovesByPokemonId(selectedPokemonId);
-
       if (isMounted) {
-        setAvailableMoves(data); // 取得した全技をセット
-        setFilteredMoves(data); // 最初は絞り込みなし（全表示）
-        setQuery(""); // 技の入力欄の文字をリセット
+        setAvailableMoves(data);
+        setFilteredMoves(data);
+        setQuery(""); // 新しいポケモンになったら技の入力をリセット
       }
     };
 
     fetchPokemonMoves();
+    return () => { isMounted = false; };
+  }, [selectedPokemonId]);
 
-    // クリーンアップ関数
-    return () => {
-      isMounted = false;
-    };
-  }, [selectedPokemonId]); // 👈 ポケモンが変更されるたびに、この処理が自動で走る
-
-  // 外側をクリックしたらドロップダウンを閉じる処理
+  // 2. 外側クリックでドロップダウンを閉じる処理
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        wrapperRef.current &&
-        !wrapperRef.current.contains(event.target as Node)
-      ) {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
         setIsOpen(false);
       }
     };
@@ -75,6 +63,7 @@ export default function MoveSearch({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // 3. キーボード操作でのスクロール追従処理
   useEffect(() => {
     if (focusedIndex >= 0) {
       const activeItem = document.getElementById(`move-suggestion-${focusedIndex}`);
@@ -82,40 +71,43 @@ export default function MoveSearch({
     }
   }, [focusedIndex]);
 
+  // ----------------------------------------------------
+  // 💡 【追加】決定時の共通ロジック（重複コードの排除）
+  // ----------------------------------------------------
+  const handleDecide = (move: Move) => {
+    onSelect(move);
+    setQuery(move.name);
+    setIsOpen(false);
+    setFocusedIndex(-1);
+  };
 
-// 手入力でEnterを押した時の強制検索ロジック（完全防弾仕様）
+  // 手入力してEnterを押した時の「データベース全検索からの強制セット」機能
   const handleManualSubmit = async (inputText: string) => {
-    // 1. まずは「覚える技リスト(availableMoves)」の中に完全一致があればそれをセット
+    // まずは「覚える技」の中に完全一致がないか探す
     const localMatch = availableMoves.find((m) => m.name === inputText);
     if (localMatch) {
-      handleSelect(localMatch);
+      handleDecide(localMatch);
       return;
     }
 
-    // 2. 覚える技になければ、API経由で「全技DB」から探す！
+    // なければAPI経由で全技データベースから探す
     try {
       const results = await searchMoves(inputText);
-      
-      // 💡 修正ポイント1: APIが配列で返してこなかった場合（1件だけのデータ等）でも強制的に配列にする
+      // APIがオブジェクト1件だけを返してきた場合でも、findを使えるように配列化する安全策
       const resultsArray = Array.isArray(results) ? results : [results];
       const exactMatch = resultsArray.find((m: Move) => m && m.name === inputText);
       
       if (exactMatch) {
-        // 見つかったら強制セット！
-        handleSelect(exactMatch);
+        handleDecide(exactMatch);
       } else {
         alert(`「${inputText}」という技はデータベースに見つかりませんでした。`);
       }
     } catch (error) {
       console.error(error);
-      // 💡 修正ポイント2: 404エラー（見つからない）で例外に飛んだ場合も想定する
-      alert(`「${inputText}」を取得できませんでした。（DBに無いか、サーバーがスリープ中の可能性があります）`);
+      alert("技データの取得に失敗しました。（通信エラー等の可能性があります）");
     }
   };
 
-
-
-  // 入力時のローカル絞り込み処理
   const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setQuery(val);
@@ -123,15 +115,14 @@ export default function MoveSearch({
     setIsOpen(true);
 
     if (val.length > 0) {
-      // すでに取得済みの availableMoves の中から、文字が含まれるものだけを残す
+      // 技の場合はすでにDBから覚えるリストを全件取得してあるので、通信はせずにローカルで超高速絞り込み
       const filtered = availableMoves.filter((m) => m.name.includes(val));
       setFilteredMoves(filtered);
     } else {
-      setFilteredMoves(availableMoves); // 空なら全表示に戻す
+      setFilteredMoves(availableMoves);
     }
   };
 
-// キーボード操作（Enterを押した時の処理を強化）
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (query.trim().length === 0) return;
 
@@ -147,22 +138,14 @@ export default function MoveSearch({
       }
     } else if (e.key === "Enter") {
       e.preventDefault();
-      // サジェストから選んでいる場合
       if (isOpen && focusedIndex >= 0 && focusedIndex < filteredMoves.length) {
-        handleSelect(filteredMoves[focusedIndex]);
+        // サジェストを選んでいる場合
+        handleDecide(filteredMoves[focusedIndex]);
       } else {
-        // サジェストを選ばずに、文字を打ってそのままEnterを押した場合
+        // サジェストを選ばずに、直接文字を打ってEnterを押した場合
         handleManualSubmit(query.trim());
       }
     }
-  };
-
-  // 技を決定した時の処理
-  const handleSelect = (move: Move) => {
-    onSelect(move);
-    setQuery(move.name); // 選択した技名を入力欄に入れる
-    setIsOpen(false); // ドロップダウンを閉じる
-    setFocusedIndex(-1);
   };
 
   return (
@@ -173,7 +156,7 @@ export default function MoveSearch({
         value={query}
         onChange={handleInput}
         onKeyDown={handleKeyDown}
-        onFocus={() => setIsOpen(true)} // クリックされたらバッと開く
+        onFocus={() => setIsOpen(true)}
         placeholder="文字を入力して絞り込み..."
         style={{
           width: "95%",
@@ -183,6 +166,7 @@ export default function MoveSearch({
           color: "black",
         }}
       />
+      
       {isOpen && filteredMoves.length > 0 && (
         <ul
           style={{
@@ -204,8 +188,8 @@ export default function MoveSearch({
           {filteredMoves.map((m, index) => (
             <li
               key={m.id}
-              id={`move-suggestion-${index}`} // フォーカス管理のためのID
-              onClick={() => handleSelect(m)}
+              id={`move-suggestion-${index}`}
+              onClick={() => handleDecide(m)} // 共通関数を呼び出す
               style={{
                 padding: "10px 8px",
                 cursor: "pointer",
@@ -216,30 +200,17 @@ export default function MoveSearch({
                 backgroundColor: index === focusedIndex ? "#e0f2fe" : "white",
               }}
             >
-              {/* 左側：名前とタイプ */}
               <div>
                 <span style={{ fontWeight: "bold" }}>{m.name}</span>
-                <span
-                  style={{
-                    fontSize: "0.7rem",
-                    color: "#666",
-                    marginLeft: "5px",
-                  }}
-                >
+                <span style={{ fontSize: "0.7rem", color: "#666", marginLeft: "5px" }}>
                   ({m.type})
                 </span>
               </div>
-              {/* 右側：分類と威力 */}
               <div style={{ fontSize: "0.8rem", textAlign: "right" }}>
                 <span
                   style={{
                     marginRight: "8px",
-                    color:
-                      m.category === "物理"
-                        ? "#ff4d4d"
-                        : m.category === "特殊"
-                          ? "#4d79ff"
-                          : "#888",
+                    color: m.category === "物理" ? "#ff4d4d" : m.category === "特殊" ? "#4d79ff" : "#888",
                     fontWeight: "bold",
                   }}
                 >
