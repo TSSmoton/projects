@@ -36,6 +36,8 @@ interface Move {
   minHits?: number;      // 連続技の最小回数
   maxHits?: number;      // 連続技の最大回数
   isWaterPowerUp?: boolean; // すいほうなどの補正用
+  accuracy?: number; // 👈 追加
+  effect?: string;   // 👈 追加
 }
 
 interface Item {
@@ -448,6 +450,8 @@ export default function Home() {
   const [atkEv, setAtkEv] = useState(32); // 攻撃側：最大(32)で初期化
   const [atkNature, setAtkNature] = useState(1.1);
 
+  const [isMoveHovered, setIsMoveHovered] = useState(false);
+
   const [defHpEv, setDefHpEv] = useState(32); // 防御側HP：最大(32)で初期化
   const [defEv, setDefEv] = useState(0); // 防御側耐久：0で初期化
   const [defNature, setDefNature] = useState(1.0);
@@ -465,7 +469,7 @@ export default function Home() {
 
   // ステルスロック・まきびしの有無
   const [isStealthRock, setIsStealthRock] = useState(false);
-const [spikes, setSpikes] = useState(0); // まきびし (0〜3)
+  const [spikes, setSpikes] = useState(0); // まきびし (0〜3)
   const [isPoisoned, setIsPoisoned] = useState(false); // どくびし1回 (通常の毒)
   const [isBadlyPoisoned, setIsBadlyPoisoned] = useState(false); // どくびし2回 (猛毒/どくどく)
 
@@ -1422,6 +1426,9 @@ const getSurvivalText = (res: any, item: any) => {
                 {/* 選択された技の詳細表示 */}
                 {selectedMove && (
                   <div
+                    // 👇 マウスが乗った時・離れた時の処理を追加
+                    onMouseEnter={() => setIsMoveHovered(true)}
+                    onMouseLeave={() => setIsMoveHovered(false)}
                     style={{
                       marginTop: "10px",
                       padding: "12px",
@@ -1429,6 +1436,7 @@ const getSurvivalText = (res: any, item: any) => {
                       borderRadius: "8px",
                       border: "1px solid #ddd",
                       borderLeft: `6px solid ${selectedMove.category === "物理" ? "#ff4d4d" : selectedMove.category === "特殊" ? "#4d79ff" : "#888"}`,
+                      position: "relative", // 👈 ツールチップをこの箱の基準で出すため必須
                     }}
                   >
                     <div
@@ -1441,12 +1449,15 @@ const getSurvivalText = (res: any, item: any) => {
                       <span style={{ fontWeight: "bold", fontSize: "1.1rem" }}>
                         {selectedMove.name}
                       </span>
-                      <span style={{ fontWeight: "bold", color: "#333" }}>
-                        威力:{" "}
-                        {selectedMove.power && selectedMove.power > 0
-                          ? selectedMove.power
-                          : "—"}
-                      </span>
+                      {/* 👇 威力と命中を並べて表示 */}
+                      <div style={{ textAlign: "right" }}>
+                        <span style={{ fontWeight: "bold", color: "#333", marginRight: "10px" }}>
+                          威力: {selectedMove.power && selectedMove.power > 0 ? selectedMove.power : "—"}
+                        </span>
+                        <span style={{ fontSize: "0.9rem", color: "#666" }}>
+                          命中: {selectedMove.accuracy ? selectedMove.accuracy : "—"}
+                        </span>
+                      </div>
                     </div>
 
                     <div
@@ -1492,6 +1503,47 @@ const getSurvivalText = (res: any, item: any) => {
                         </span>
                       )}
                     </div>
+
+                    {/* 👇 ツールチップ本体（カーソルが乗っていて、説明文がある時だけ表示） */}
+                    {isMoveHovered && selectedMove.effect && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: "100%", // 技カードの「真下」に出す
+                          left: "50%", // 中央寄せ
+                          transform: "translateX(-50%)", // 中央寄せの微調整
+                          marginTop: "8px", // カードとの隙間
+                          backgroundColor: "rgba(0, 0, 0, 0.85)", // 黒の半透明
+                          color: "#fff",
+                          padding: "8px 12px",
+                          borderRadius: "6px",
+                          fontSize: "0.75rem",
+                          width: "max-content", // 文字数に合わせて広がる
+                          maxWidth: "280px", // でも最大幅は制限する
+                          zIndex: 100, // 他の要素より手前に出す
+                          pointerEvents: "none", // マウスの邪魔をしない
+                          boxShadow: "0 4px 10px rgba(0,0,0,0.3)",
+                          lineHeight: "1.4",
+                          textAlign: "left",
+                        }}
+                      >
+                        {/* 吹き出しの「上向きの三角形（しっぽ）」 */}
+                        <div
+                          style={{
+                            position: "absolute",
+                            bottom: "100%",
+                            left: "50%",
+                            transform: "translateX(-50%)",
+                            borderWidth: "6px",
+                            borderStyle: "solid",
+                            borderColor: "transparent transparent rgba(0, 0, 0, 0.85) transparent",
+                          }}
+                        />
+                        {selectedMove.effect}
+                      </div>
+                    )}
+
+
                   </div>
                 )}
               </div>
