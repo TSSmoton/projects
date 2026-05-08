@@ -57,15 +57,7 @@ public class PokemonImportService {
         }
     }
 
-    // private void processAndSave(String baseName, String url, boolean isDefault) {
-    //     Map<String, Object> data = restTemplate.getForObject(url, Map.class);
-    //     Integer id = (Integer) data.get("id");
-    //     String enName = (String) data.get("name");
-    //     String finalName = isDefault ? baseName : formatVariantName(baseName, enName);
 
-    //     saveToDb(id, finalName, data);
-    //     System.out.println("インポート成功: " + finalName + " (ID:" + id + ")");
-    // }
 
 
     // 個別処理
@@ -79,10 +71,7 @@ public class PokemonImportService {
         saveToDb(id, speciesId, finalName, data);
     }
 
-    // private void saveToDb(Integer id, String name, Map<String, Object> pokeData) {
-    //     Pokemon p = new Pokemon();
-    //     p.setId(id);
-    //     p.setName(name);
+
     private void saveToDb(Integer id, Integer speciesId, String name, Map<String, Object> pokeData) {
         Pokemon p = new Pokemon();
         p.setId(id);

@@ -22,14 +22,20 @@ public class PokemonController {
      * 解説：@GetMapping("/import-all-forms")
      * これにより http://localhost:8080/api/pokemon/import-all-forms というURLが有効になります。
      */
-    @GetMapping("/import-all-forms")
+@GetMapping("/import-all-forms")
     public String importAllForms(
-        @RequestParam(defaultValue = "1") int start, // URLの?start=...を受け取る。無ければ1
-        @RequestParam(defaultValue = "1025") int end   // URLの?end=...を受け取る。無ければ151
+        @RequestParam(defaultValue = "1") int start, 
+        @RequestParam(defaultValue = "1025") int end 
     ) {
-        // Service側の「メガシンカ対応版」メソッドを呼び出す
-        importService.importWithVarieties(start, end);
-        return "インポート処理を開始しました。ターミナルのログを確認してください。";
+        // 👇 ここをバックグラウンド実行（別の作業員に任せる）
+        new Thread(() -> {
+            System.out.println("PokeAPIからのインポートを開始します...");
+            importService.importWithVarieties(start, end);
+            System.out.println("すべてのインポートが完了しました！");
+        }).start();
+
+        // 👆 別の作業員に任せたので、ここは一瞬でブラウザに返却される
+        return "インポート処理をバックグラウンドで開始しました。ターミナルのログを確認してください。";
     }
 
 

@@ -2,7 +2,12 @@
 // const API_BASE_URL = "http://localhost:8080/api";
 
 // 修正後（インターネット上のRenderを探しに行く！）
-const API_BASE_URL = "https://projects-cskf.onrender.com/api";
+// const API_BASE_URL = "https://projects-cskf.onrender.com/api";
+
+// 開発中（localhost）なら8080を、本番環境ならRenderのURLを自動で使う魔法の設定
+const API_BASE_URL = process.env.NODE_ENV === "production" 
+  ? "https://projects-cskf.onrender.com/api"
+  : "http://localhost:8080/api";
 
 // ポケモン検索用
 export const searchPokemon = async (name: string) => {

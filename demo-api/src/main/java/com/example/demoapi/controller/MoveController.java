@@ -18,10 +18,19 @@ public class MoveController {
     @Autowired
     private MoveRepository moveRepository;
 
-    @GetMapping("/import")
-    public String importMoves(@RequestParam int start, @RequestParam int end) {
-        moveImportService.importMoves(start, end);
-        return "技のインポートを開始しました。";
+@GetMapping("/import")
+    public String importMoves(
+        @RequestParam(defaultValue = "1") int start, 
+        @RequestParam(defaultValue = "1000") int end // 技は現在900種類ちょっとあります
+    ) {
+        // 👇 バックグラウンドで実行させる魔法
+        new Thread(() -> {
+            System.out.println("PokeAPIからの【技】インポートを開始します...");
+            moveImportService.importMoves(start, end);
+            System.out.println("【技】のインポートがすべて完了しました！");
+        }).start();
+
+        return "技のインポートをバックグラウンドで開始しました。ターミナルのログを確認してください。";
     }
     @GetMapping("/search")
     public List<Move> searchMoves(@RequestParam String name) {
