@@ -1,0 +1,319 @@
+/* app/page.module.css */
+
+.main {
+  padding: 20px;
+  min-height: 100vh;
+  background-color: #f0f2f5;
+  color: #333;
+}
+
+.title {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.layoutGroup {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.sidePanel {
+  background-color: #fff;
+  padding: 20px;
+  border-radius: 10px;
+  width: 350px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.panelTitleAttacker {
+  color: #ff4d4d;
+  border-bottom: 2px solid;
+}
+
+.panelTitleDefender {
+  color: #4d79ff;
+  border-bottom: 2px solid;
+}
+
+.imageContainer {
+  margin-top: 15px;
+  text-align: center;
+}
+
+.imageWrapper {
+  position: relative;
+  display: inline-block;
+  margin-bottom: 10px;
+  width: 70%;
+}
+
+.typeBadgeList {
+  position: absolute;
+  top: 0;
+  right: -10px;
+  display: flex;
+  gap: 2px;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.sectionLabel {
+  font-size: 0.8rem;
+  margin-bottom: 5px;
+  font-weight: bold;
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  font-size: 0.75rem;
+  background-color: #eee;
+  padding: 8px;
+  border-radius: 5px;
+  margin-bottom: 10px;
+}
+
+.inputGroup {
+  margin-top: 15px;
+}
+
+.sliderHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.slider {
+  width: 100%;
+  cursor: pointer;
+}
+
+.numberInputArea {
+  text-align: left;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.actualStatBox {
+  padding: 10px;
+  background-color: #f9f9f9;
+  border-radius: 5px;
+  margin-bottom: 10px;
+}
+
+.radioGroup {
+  display: flex;
+  gap: 8px;
+  font-size: 0.8rem;
+  justify-content: center;
+}
+
+.gridSelect {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.selectBox {
+  width: 100%;
+  padding: 4px;
+  color: black;
+  border-radius: 4px;
+}
+
+.rankStepper {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.stepperContainer {
+  display: flex;
+  align-items: center;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.stepperButton {
+  width: 30px;
+  height: 30px;
+  background-color: #f0f0f0;
+  border: none;
+  cursor: pointer;
+  font-size: 1.2rem;
+  color: #333;
+}
+
+.stepperInput {
+  width: 40px;
+  height: 30px;
+  text-align: center;
+  border: none;
+  border-left: 1px solid #ccc;
+  border-right: 1px solid #ccc;
+  color: black;
+  margin: 0;
+  outline: none;
+}
+
+.quickButton {
+  font-size: 0.7rem;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  background-color: #fff;
+  cursor: pointer;
+  color: #333;
+}
+
+.statusCheckboxArea {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* 中央エリア */
+.centerArea {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  width: 10%;
+}
+
+.swapButton {
+  background-color: #fff;
+  border: 2px solid #ddd;
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #666;
+  cursor: pointer;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.swapButton:hover {
+  transform: scale(1.1);
+  border-color: #999;
+  color: #333;
+}
+
+.envPanel {
+  width: 100%;
+  background-color: #fff;
+  padding: 15px;
+  border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.envSectionTitle {
+  font-weight: bold;
+  font-size: 0.9rem;
+  display: block;
+  margin-bottom: 5px;
+}
+
+.envOptionList {
+  display: flex;
+  gap: 5px;
+  font-size: 0.8rem;
+  flex-wrap: wrap;
+}
+
+/* 計算結果 */
+.resultContainer {
+  margin-top: 20px;
+  display: flex;
+  justify-content: center;
+}
+
+.resultCard {
+  padding: 30px;
+  background-color: #fff;
+  border-radius: 20px;
+  width: 100%;
+  max-width: 600px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+  border: 1px solid #eaeaea;
+}
+
+.damageMain {
+  font-size: 3rem;
+  font-weight: 900;
+  margin: 5px 0;
+  color: #1a1a1a;
+}
+
+.survivalBox {
+  text-align: center;
+  padding: 15px;
+  border-radius: 12px;
+  background-color: #f8fafc;
+  margin-top: 10px;
+}
+
+/* 技詳細 */
+.moveCard {
+  margin-top: 10px;
+  padding: 12px;
+  background-color: #fff;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  position: relative;
+}
+
+.moveHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.moveTooltip {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 8px;
+  background-color: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  width: max-content;
+  max-width: 280px;
+  z-index: 100;
+  pointer-events: none;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+  line-height: 1.4;
+  text-align: left;
+}
+
+.tooltipTail {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 6px;
+  border-style: solid;
+  border-color: transparent transparent rgba(0, 0, 0, 0.85) transparent;
+}
