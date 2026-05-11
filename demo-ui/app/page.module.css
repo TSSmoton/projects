@@ -1,5 +1,3 @@
-/* app/page.module.css */
-
 .main {
   padding: 20px;
   min-height: 100vh;
@@ -17,7 +15,7 @@
   gap: 20px;
   justify-content: center;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-start;
 }
 
 .sidePanel {
@@ -31,11 +29,15 @@
 .panelTitleAttacker {
   color: #ff4d4d;
   border-bottom: 2px solid;
+  margin-top: 0;
+  margin-bottom: 15px;
 }
 
 .panelTitleDefender {
   color: #4d79ff;
   border-bottom: 2px solid;
+  margin-top: 0;
+  margin-bottom: 15px;
 }
 
 .imageContainer {
@@ -64,6 +66,7 @@
   font-size: 0.8rem;
   margin-bottom: 5px;
   font-weight: bold;
+  display: block;
 }
 
 .statsGrid {
@@ -79,6 +82,7 @@
 
 .inputGroup {
   margin-top: 15px;
+  text-align: left;
 }
 
 .sliderHeader {
@@ -90,20 +94,32 @@
 .slider {
   width: 100%;
   cursor: pointer;
+  margin: 10px 0;
 }
 
 .numberInputArea {
-  text-align: left;
   display: flex;
   gap: 8px;
   align-items: center;
+  margin-top: 5px;
 }
 
 .actualStatBox {
   padding: 10px;
   background-color: #f9f9f9;
   border-radius: 5px;
-  margin-bottom: 10px;
+  margin: 15px 0;
+  text-align: left;
+}
+
+.actualStatLabel {
+  margin: 0;
+  font-weight: bold;
+}
+
+.actualStatValue {
+  margin: 5px 0;
+  font-size: 0.9rem;
 }
 
 .radioGroup {
@@ -111,6 +127,7 @@
   gap: 8px;
   font-size: 0.8rem;
   justify-content: center;
+  margin-top: 10px;
 }
 
 .gridSelect {
@@ -118,17 +135,19 @@
   grid-template-columns: 1fr 1fr;
   gap: 10px;
   margin-top: 15px;
+  text-align: left;
 }
 
 .selectBox {
   width: 100%;
-  padding: 4px;
+  padding: 6px;
   color: black;
   border-radius: 4px;
+  border: 1px solid #ccc;
 }
 
 .rankStepper {
-  margin-top: 10px;
+  margin-top: 15px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -179,7 +198,8 @@
   margin-top: 10px;
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  gap: 5px;
+  font-size: 0.8rem;
 }
 
 /* 中央エリア */
@@ -189,7 +209,7 @@
   align-items: center;
   justify-content: center;
   gap: 20px;
-  width: 10%;
+  width: 200px;
 }
 
 .swapButton {
@@ -223,26 +243,33 @@
   box-shadow: 0 2px 10px rgba(0,0,0,0.1);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 15px;
+  text-align: left;
 }
 
 .envSectionTitle {
   font-weight: bold;
   font-size: 0.9rem;
   display: block;
-  margin-bottom: 5px;
+  margin-bottom: 8px;
 }
 
 .envOptionList {
   display: flex;
-  gap: 5px;
+  gap: 8px;
   font-size: 0.8rem;
   flex-wrap: wrap;
 }
 
+.divider {
+  border-top: 1px solid #eee;
+  padding-top: 10px;
+  margin-top: 5px;
+}
+
 /* 計算結果 */
 .resultContainer {
-  margin-top: 20px;
+  margin-top: 30px;
   display: flex;
   justify-content: center;
 }
@@ -257,11 +284,29 @@
   border: 1px solid #eaeaea;
 }
 
+.badgeArea {
+  text-align: center;
+  margin-bottom: 15px;
+}
+
+.badge {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: bold;
+}
+
 .damageMain {
   font-size: 3rem;
   font-weight: 900;
   margin: 5px 0;
   color: #1a1a1a;
+}
+
+.damageSub {
+  font-size: 1.1rem;
+  font-weight: bold;
+  color: #666;
 }
 
 .survivalBox {
@@ -272,7 +317,12 @@
   margin-top: 10px;
 }
 
-/* 技詳細 */
+.survivalText {
+  font-size: 1.5rem;
+  font-weight: bold;
+}
+
+/* 技詳細カード */
 .moveCard {
   margin-top: 10px;
   padding: 12px;
@@ -280,12 +330,48 @@
   border-radius: 8px;
   border: 1px solid #ddd;
   position: relative;
+  text-align: left;
 }
 
 .moveHeader {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.moveTitle {
+  font-weight: bold;
+  font-size: 1.1rem;
+}
+
+.moveStats {
+  text-align: right;
+}
+
+.movePower {
+  font-weight: bold;
+  color: #333;
+  margin-right: 10px;
+}
+
+.moveAccuracy {
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.moveMeta {
+  margin-top: 5px;
+  font-size: 0.85rem;
+  color: #666;
+  display: flex;
+  gap: 10px;
+}
+
+.stabBadge {
+  margin-left: auto;
+  font-size: 0.7rem;
+  padding: 2px 5px;
+  borderRadius: 4px;
 }
 
 .moveTooltip {
