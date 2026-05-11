@@ -525,7 +525,7 @@
   justify-content: center;
 }
 .resultCard {
-  padding: 30px;
+  padding: 20px;
   background-color: #fff;
   border-radius: 20px;
   width: 100%;
@@ -546,7 +546,7 @@
   margin-bottom: 15px;
 }
 .resultBadge {
-  padding: 4px 12px;
+  padding: 4px 9px;
   border-radius: 20px;
   font-size: 0.8rem;
   font-weight: bold;
@@ -560,9 +560,9 @@
   margin-bottom: 0;
 }
 .damageRange {
-  font-size: 3rem;
+  font-size: 2rem;
   font-weight: 900;
-  margin: 5px 0;
+  margin: 2px 0;
   color: #1a1a1a;
 }
 .damagePercent {
@@ -572,13 +572,13 @@
 }
 .survivalWrapper {
   text-align: center;
-  padding: 15px;
+  padding: 2px;
   border-radius: 12px;
   background-color: #f8fafc;
-  margin-top: 10px;
+  margin-top: 5px;
 }
 .survivalMain {
-  font-size: 1.5rem;
+  font-size: 1.3rem;
   font-weight: bold;
 }
 .survivalSub {
@@ -590,4 +590,11 @@
   margin: 5px 0 0;
   font-size: 0.9rem;
   color: #888;
+}
+
+.isCritText {
+  margin-top: 5px;
+  font-size: 0.9rem;
+  color: #ef4444;
+  font-weight: bold;
 }

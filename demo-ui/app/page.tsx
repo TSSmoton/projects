@@ -1752,21 +1752,21 @@ const getSurvivalText = (res: any, item: any) => {
       <div className={styles.resultArea}>
         <div className={styles.resultCard}>
           {!res ? (
-            <p style={{ textAlign: "center", color: "#999" }}>ポケモンと技を選択してダメージを測定</p>
+            <p className={styles.placeholderText}>ポケモンと技を選択してダメージを測定</p>
           ) : res.isStatus ? (
-            <h2 style={{ textAlign: "center", color: "#888" }}>変化技（ダメージなし）</h2>
+            <h2 className={styles.statusMoveText}>変化技（ダメージなし）</h2>
           ) : (
             <>
               {/* 1. 状態バッジ */}
-              <div className={styles.badgeArea}>
+              <div className={styles.badgeWrapper}>
                 {(() => {
                   // 💡 ステロ等の設置技で即死する場合は、警告バッジを出す
                   if (res.isDeadByEntry) {
-                    return <span className={styles.badge} style={{ backgroundColor: "#fee2e2", color: "#ef4444" }}>設置技等で瀕死</span>;
+                    return <span className={styles.resultBadge} style={{ backgroundColor: "#fee2e2", color: "#ef4444" }}>設置技等で瀕死</span>;
                   }
                   const badge = getBadgeStyle(res.ohkoProb);
                   return (
-                    <span className={styles.badge} style={{ backgroundColor: badge.bg, color: badge.text }}>
+                    <span className={styles.resultBadge} style={{ backgroundColor: badge.bg, color: badge.text }}>
                       {badge.label}
                     </span>
                   );
@@ -1774,18 +1774,18 @@ const getSurvivalText = (res: any, item: any) => {
               </div>
 
               {/* 2. ダメージ数値 */}
-              <div style={{ textAlign: "center" }}>
-                <p style={{ fontSize: "0.9rem", color: "#666", marginBottom: "0" }}>通常ダメージ</p>
-                <h2 className={styles.damageMain}>
+              <div className={styles.damageTextWrapper}>
+                <p className={styles.damageLabel}>通常ダメージ</p>
+                <h2 className={styles.damageRange}>
                   {res.effectiveness === 0 ? "0" : `${Math.max(1, res.min)} 〜 ${Math.max(1, res.max)}`}
                 </h2>
-                <p className={styles.damageSub}>
+                <p className={styles.damagePercent}>
                   （{((res.min / res.hp) * 100).toFixed(1)}% 〜 {((res.max / res.hp) * 100).toFixed(1)}%）
                 </p>
 
                 {/* 💡 急所ダメージを常に小さく赤字で表示 */}
                 {res.effectiveness > 0 && res.critDamageList && (
-                  <div style={{ marginTop: "10px", fontSize: "0.95rem", color: "#ef4444", fontWeight: "bold" }}>
+                  <div className={styles.isCritText}>
                     急所時: {res.critDamageList[0]} 〜 {res.critDamageList[15]} ({((res.critDamageList[0] / res.hp) * 100).toFixed(1)}% 〜 {((res.critDamageList[15] / res.hp) * 100).toFixed(1)}%)
                   </div>
                 )}
@@ -1798,12 +1798,12 @@ const getSurvivalText = (res: any, item: any) => {
               {(() => {
                 const survival = getSurvivalText(res, defItem);
                 return (
-                  <div className={styles.survivalBox}>
-                    <div className={styles.survivalText} style={{ color: survival.color }}>
+                  <div className={styles.survivalWrapper}>
+                    <div className={styles.survivalMain} style={{ color: survival.color }}>
                       {survival.text}
-                      {survival.sub && <span style={{ fontSize: "0.8rem", display: "block", color: "#666", marginTop: "4px" }}>{survival.sub}</span>}
+                      {survival.sub && <span className={styles.survivalSub} style={{ marginTop: "4px" }}>{survival.sub}</span>}
                     </div>
-                    <p style={{ margin: "5px 0 0", fontSize: "0.9rem", color: "#888" }}>相性倍率: {res.effectiveness}x</p>
+                    <p className={styles.effectivenessText}>相性倍率: {res.effectiveness}x</p>
                   </div>
                 );
               })()}
