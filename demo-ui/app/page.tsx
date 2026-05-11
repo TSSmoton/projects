@@ -540,12 +540,11 @@ const simulateSurvival = (maxHp: number, damage: number, item: Item) => {
   
   
   // --- ダメージ計算ロジック ---
-
-const calculateResult = () => {
+  const calculateResult = () => {
     if (!attacker || !defender || !selectedMove) return null;
 
     if (selectedMove.category === "変化") {
-      return { min: 0, max: 0, hp: 100, effectiveness: 0, ohkoProb: 0, isStatus: true, survival: { minHits: 0, maxHits: 0 } };
+      return { min: 0, max: 0, hp: 100, effectiveness: 0, ohkoProb: 0, isStatus: true, survival: { minHits: 0, maxHits: 0 }, damageList: [], critDamageList: [], isDeadByEntry: false };
     }
 
     const isPhysical = selectedMove.category === "物理";
@@ -554,6 +553,22 @@ const calculateResult = () => {
 
     const atkAbil = RELEVANT_ABILITIES.find((a) => a.name === atkAbility) || { name: "なし", multiplier: 1.0 };
     const defAbil = RELEVANT_ABILITIES.find((a) => a.name === defAbility) || { name: "なし", multiplier: 1.0 };
+
+    // 💀 0. 設置技（ステロ・まきびし）の事前計算（確定一発の判定基準にするため）
+    let entryDamage = 0;
+    const isGrounded = defender.type1 !== "ひこう" && defender.type2 !== "ひこう" && defAbility !== "ふゆう";
+    if (defAbility !== "マジックガード") {
+      if (isStealthRock) {
+        const r1 = TYPE_CHART["いわ"]?.[defender.type1] ?? 1.0;
+        const r2 = defender.type2 ? (TYPE_CHART["いわ"]?.[defender.type2] ?? 1.0) : 1.0;
+        entryDamage += Math.floor(finalHp * (1 / 8) * r1 * r2);
+      }
+      if (spikes > 0 && isGrounded) {
+        entryDamage += Math.floor(finalHp * (spikes === 1 ? 1/8 : spikes === 2 ? 1/6 : 1/4));
+      }
+    }
+    const startHp = finalHp - entryDamage;
+    const isDeadByEntry = startHp <= 0;
 
     // 0. 技の「威力 (Power)」の計算
     let currentPower = selectedMove.power;
@@ -568,141 +583,147 @@ const calculateResult = () => {
       if (weather === "snow") currentMoveType = "こおり";
     }
   
-  
-  const hasFairyAura = atkAbility === "フェアリーオーラ" || defAbility === "フェアリーオーラ";
-  const hasAuraBreak = atkAbility === "オーラブレイク" || defAbility === "オーラブレイク";
-  if (hasFairyAura && selectedMove.type === "フェアリー") {
-    const auraMultiplier = hasAuraBreak ? 0.75 : 1.33;
-    currentPower = Math.floor(currentPower * auraMultiplier);
-  }
-
-  const isAtkGrounded = attacker.type1 !== "ひこう" && attacker.type2 !== "ひこう" && atkAbility !== "ふゆう";
-  if (isAtkGrounded) {
-    if (terrain === "electric" && currentMoveType === "でんき") currentPower = Math.floor(currentPower * 1.3);
-    else if (terrain === "grassy" && currentMoveType === "くさ") currentPower = Math.floor(currentPower * 1.3);
-    else if (terrain === "psychic" && currentMoveType === "エスパー") currentPower = Math.floor(currentPower * 1.3);
-  }
-  if (terrain === "grassy" && ["じしん", "じならし", "マグニチュード"].includes(selectedMove.name)) {
-    currentPower = Math.floor(currentPower * 0.5);
-  }
-
-  // 将来的にiscontactフラグを技データに入れて、かたいツメの補正を接触技に限定する
-  if (atkAbility === "かたいツメ" && isPhysical) {
-    currentPower = Math.floor(currentPower * atkAbil.multiplier);
-  }
-
-  // 1. 攻撃力 (A) の計算
-  let a = calcStat(isPhysical ? attacker.attack : attacker.spAttack, atkEv, atkNature);
-  a = Math.floor(a * RANK_MODIFIERS[atkRank]);
-  // 特性補正：ちからもち・ヨガパワーを物理技に限定して適用
-  if ((atkAbility === "ちからもち" || atkAbility === "ヨガパワー") && isPhysical) a = Math.floor(a * atkAbil.multiplier);
-  // アイテム補正：こだわりハチマキを物理技、こだわりメガネを特殊技に限定して適用
-  if (atkItem.type === (isPhysical ? "atk" : "spa")) a = Math.floor(a * atkItem.multiplier);
-  
-  // おやこあいの場合、全ての攻撃で倍率をかける（物理・特殊両方に対応）
-  if (atkAbility === "おやこあい") dmg = Math.floor(dmg * atkAbil.multiplier);
-  // テクニシャンの威力アップも物理・特殊両方に対応させる（ただし、威力60以下の技に限定）
-  if (atkAbility === "テクニシャン" && selectedMove.power <= 60) dmg = Math.floor(dmg * atkAbil.multiplier);
-  
-  // こんじょうのやけど無効と攻撃1.5倍を同時に処理、こんじょう以外ならやけどの半減も適用
-  if (isAtkBurned && isPhysical) {
-    a = atkAbility === "こんじょう" ? Math.floor(a * atkAbil.multiplier) : Math.floor(a * 0.5);
-  }
-
-  // 2. 防御力 (D) の計算
-  const targetsPhysicalDef = ["サイコショック", "サイコブレイク", "しんぴのつるぎ"].includes(selectedMove.name);
-  const usesPhysicalStat = isPhysical || targetsPhysicalDef;
-
-  let d = calcStat(usesPhysicalStat ? defender.defense : defender.spDefense, defEv, defNature);
-  d = Math.floor(d * RANK_MODIFIERS[defRank]);
-  if (defItem.type === (usesPhysicalStat ? "def" : "spd")) d = Math.floor(d * defItem.multiplier);
-
-  if (weather === "sand" && !usesPhysicalStat && (defender.type1 === "いわ" || defender.type2 === "いわ")) d = Math.floor(d * 1.5);
-  if (weather === "snow" && usesPhysicalStat && (defender.type1 === "こおり" || defender.type2 === "こおり")) d = Math.floor(d * 1.5);
-
-  // 3. 基本ダメージ計算
-  let baseDamage = Math.floor(Math.floor((Math.floor((2 * 50) / 5 + 2) * currentPower * a) / d) / 50 + 2);
-
-  if (weather === "sun") {
-    if (currentMoveType === "ほのお") baseDamage = Math.floor(baseDamage * 1.5);
-    if (currentMoveType === "みず") baseDamage = Math.floor(baseDamage * 0.5);
-  } else if (weather === "rain") {
-    if (currentMoveType === "みず") baseDamage = Math.floor(baseDamage * 1.5);
-    if (currentMoveType === "ほのお") baseDamage = Math.floor(baseDamage * 0.5);
-  }
-
-  
-  // ミストフィールドのドラゴン技半減効果は、地面にいるポケモンにのみ適用される（ふゆうやひこうタイプは対象外）
-  const isDefGrounded = defender.type1 !== "ひこう" && defender.type2 !== "ひこう" && defAbility !== "ふゆう";
-  if (terrain === "misty" && currentMoveType === "ドラゴン" && isDefGrounded) {
-    baseDamage = Math.floor(baseDamage * 0.5);
-  }
-
-  // 4. 乱数展開 ＆ 相性判定
-  const stabMod = (currentMoveType === attacker.type1 || currentMoveType === attacker.type2)
-      ? (atkAbility === "てきおうりょく" ? 2.0 : 1.5) : 1.0;
-
-  // tType に null と undefined の両方を許可する
-  const getTypeMultiplier = (mType: string, tType: string | null | undefined, abil: string) => {
-    if (!tType) return 1.0;
-    let m = TYPE_CHART[mType]?.[tType] ?? 1.0;
-    if ((abil === "きもったま" || abil === "マインドアイ") && tType === "ゴースト" && (mType === "ノーマル" || mType === "かくとう") && m === 0) return 1.0;
-    return m;
-  };
-
-    
-  const type1Mod = getTypeMultiplier(currentMoveType, defender.type1, atkAbility);
-    
-  const type2Mod = getTypeMultiplier(currentMoveType, defender.type2, atkAbility);
-   
-  let effectiveness = type1Mod * type2Mod;
-
-  // ふゆうの無効判定を追加（ただし、かたやぶりは無効にしない）
-  if (defAbility === "ふゆう" && currentMoveType === "じめん" && atkAbility !== "かたやぶり") effectiveness = 0;
-    
-  // ほのお・こおり技に対するあついしぼうの半減効果を追加
-  if (defAbility === "あついしぼう" && (currentMoveType === "ほのお" || currentMoveType === "こおり")) effectiveness = effectiveness * 0.5;
-
-  const damageList = [];
-    for (let i = 85; i <= 100; i++) {
-      let dmg = Math.floor((baseDamage * i) / 100);
-      dmg = Math.floor(dmg * stabMod);
-      dmg = Math.floor(dmg * effectiveness);
-
-      // アイテム補正（たつじんのおびを「抜群のみ」に適用
-      if (atkItem.name === "たつじんのおび") {
-        if (effectiveness > 1) dmg = Math.floor(dmg * atkItem.multiplier);
-      //その他のダメージ増加アイテムは全てのダメージに適用）
-      } else if (atkItem.type === "dmg") {
-        dmg = Math.floor(dmg * atkItem.multiplier);
-      }
-
-
-      // 特性補正：マルチスケイルはHP満タンのときのみダメージ半減
-      if (defAbility === "マルチスケイル" && isFullHp) dmg = Math.floor(dmg * defAbil.multiplier);
-
-      // ダメージが0になった場合の最低保証ダメージ
-      if (dmg === 0 && effectiveness > 0) dmg = 1;
-
-      // ダメージリストに追加
-      damageList.push(dmg);
+    const hasFairyAura = atkAbility === "フェアリーオーラ" || defAbility === "フェアリーオーラ";
+    const hasAuraBreak = atkAbility === "オーラブレイク" || defAbility === "オーラブレイク";
+    if (hasFairyAura && selectedMove.type === "フェアリー") {
+      const auraMultiplier = hasAuraBreak ? 0.75 : 1.33;
+      currentPower = Math.floor(currentPower * auraMultiplier);
     }
 
-    const ohkoCount = damageList.filter((d) => d >= finalHp).length;
-    const ohkoProb = (ohkoCount / 16) * 100;
+    const isAtkGrounded = attacker.type1 !== "ひこう" && attacker.type2 !== "ひこう" && atkAbility !== "ふゆう";
+    if (isAtkGrounded) {
+      if (terrain === "electric" && currentMoveType === "でんき") currentPower = Math.floor(currentPower * 1.3);
+      else if (terrain === "grassy" && currentMoveType === "くさ") currentPower = Math.floor(currentPower * 1.3);
+      else if (terrain === "psychic" && currentMoveType === "エスパー") currentPower = Math.floor(currentPower * 1.3);
+    }
+    if (terrain === "grassy" && ["じしん", "じならし", "マグニチュード"].includes(selectedMove.name)) {
+      currentPower = Math.floor(currentPower * 0.5);
+    }
 
-    // 💡 回復込みの確定数シミュレーションを実行
-    const minHits = simulateSurvival(finalHp, damageList[15], defItem); 
-    const maxHits = simulateSurvival(finalHp, damageList[0], defItem);
+    // 将来的にiscontactフラグを技データに入れて、かたいツメの補正を接触技に限定する
+    if (atkAbility === "かたいツメ" && isPhysical) {
+      currentPower = Math.floor(currentPower * atkAbil.multiplier);
+    }
+
+    // 🎲 ダメージ計算の内部関数（通常時と急所時で2回呼び出すため共通化）
+    const calcDamageArray = (isCrit: boolean) => {
+      // 💡 急所時は、自分のA下降ランクと相手のB上昇ランクを無視する
+      const effAtkRank = (isCrit && atkRank < 0) ? 0 : atkRank;
+      const effDefRank = (isCrit && defRank > 0) ? 0 : defRank;
+
+      // 1. 攻撃力 (A) の計算
+      let a = calcStat(isPhysical ? attacker.attack : attacker.spAttack, atkEv, atkNature);
+      a = Math.floor(a * RANK_MODIFIERS[effAtkRank]);
+
+      // 特性補正：ちからもち・ヨガパワーを物理技に限定して適用
+      if ((atkAbility === "ちからもち" || atkAbility === "ヨガパワー") && isPhysical) a = Math.floor(a * atkAbil.multiplier);
+      // アイテム補正：こだわりハチマキを物理技、こだわりメガネを特殊技に限定して適用
+      if (atkItem.type === (isPhysical ? "atk" : "spa")) a = Math.floor(a * atkItem.multiplier);
+      
+      // こんじょうのやけど無効と攻撃1.5倍を同時に処理、こんじょう以外ならやけどの半減も適用
+      if (isAtkBurned && isPhysical) {
+        a = atkAbility === "こんじょう" ? Math.floor(a * atkAbil.multiplier) : Math.floor(a * 0.5);
+      }
+
+      // 2. 防御力 (D) の計算
+      const targetsPhysicalDef = ["サイコショック", "サイコブレイク", "しんぴのつるぎ"].includes(selectedMove.name);
+      const usesPhysicalStat = isPhysical || targetsPhysicalDef;
+
+      let d = calcStat(usesPhysicalStat ? defender.defense : defender.spDefense, defEv, defNature);
+      d = Math.floor(d * RANK_MODIFIERS[effDefRank]);
+      if (defItem.type === (usesPhysicalStat ? "def" : "spd")) d = Math.floor(d * defItem.multiplier);
+
+      if (weather === "sand" && !usesPhysicalStat && (defender.type1 === "いわ" || defender.type2 === "いわ")) d = Math.floor(d * 1.5);
+      if (weather === "snow" && usesPhysicalStat && (defender.type1 === "こおり" || defender.type2 === "こおり")) d = Math.floor(d * 1.5);
+
+      // 3. 基本ダメージ計算
+      let baseDamage = Math.floor(Math.floor((Math.floor((2 * 50) / 5 + 2) * currentPower * a) / d) / 50 + 2);
+
+      // 💡 急所時はダメージ1.5倍
+      if (isCrit) baseDamage = Math.floor(baseDamage * 1.5);
+
+      if (weather === "sun") {
+        if (currentMoveType === "ほのお") baseDamage = Math.floor(baseDamage * 1.5);
+        if (currentMoveType === "みず") baseDamage = Math.floor(baseDamage * 0.5);
+      } else if (weather === "rain") {
+        if (currentMoveType === "みず") baseDamage = Math.floor(baseDamage * 1.5);
+        if (currentMoveType === "ほのお") baseDamage = Math.floor(baseDamage * 0.5);
+      }
+
+      // ミストフィールドのドラゴン技半減効果は、地面にいるポケモンにのみ適用される
+      if (terrain === "misty" && currentMoveType === "ドラゴン" && isDefGrounded) {
+        baseDamage = Math.floor(baseDamage * 0.5);
+      }
+
+      // 4. 乱数展開 ＆ 相性判定
+      const stabMod = (currentMoveType === attacker.type1 || currentMoveType === attacker.type2)
+          ? (atkAbility === "てきおうりょく" ? 2.0 : 1.5) : 1.0;
+
+      const getTypeMultiplier = (mType: string, tType: string | null | undefined, abil: string) => {
+        if (!tType) return 1.0;
+        let m = TYPE_CHART[mType]?.[tType] ?? 1.0;
+        if ((abil === "きもったま" || abil === "マインドアイ") && tType === "ゴースト" && (mType === "ノーマル" || mType === "かくとう") && m === 0) return 1.0;
+        return m;
+      };
+
+      const type1Mod = getTypeMultiplier(currentMoveType, defender.type1, atkAbility);
+      const type2Mod = getTypeMultiplier(currentMoveType, defender.type2, atkAbility);
+      let effectiveness = type1Mod * type2Mod;
+
+      // ふゆうの無効判定を追加（ただし、かたやぶりは無効にしない）
+      if (defAbility === "ふゆう" && currentMoveType === "じめん" && atkAbility !== "かたやぶり") effectiveness = 0;
+      // ほのお・こおり技に対するあついしぼうの半減効果を追加
+      if (defAbility === "あついしぼう" && (currentMoveType === "ほのお" || currentMoveType === "こおり")) effectiveness = effectiveness * 0.5;
+
+      const dList = [];
+      for (let i = 85; i <= 100; i++) {
+        let dmg = Math.floor((baseDamage * i) / 100);
+        dmg = Math.floor(dmg * stabMod);
+        dmg = Math.floor(dmg * effectiveness);
+
+        // アイテム補正（たつじんのおびを「抜群のみ」に適用
+        if (atkItem.name === "たつじんのおび") {
+          if (effectiveness > 1) dmg = Math.floor(dmg * atkItem.multiplier);
+        // その他のダメージ増加アイテムは全てのダメージに適用）
+        } else if (atkItem.type === "dmg") {
+          dmg = Math.floor(dmg * atkItem.multiplier);
+        }
+
+        // 💡 おやこあい、テクニシャンの処理をループ内に安全に配置
+        if (atkAbility === "おやこあい") dmg = Math.floor(dmg * 1.25); // 2回攻撃の合計概算
+        if (atkAbility === "テクニシャン" && selectedMove.power <= 60) dmg = Math.floor(dmg * 1.5);
+
+        // 特性補正：マルチスケイルはHP満タンのときのみダメージ半減
+        if (defAbility === "マルチスケイル" && isFullHp && entryDamage === 0) dmg = Math.floor(dmg * defAbil.multiplier);
+
+        // ダメージが0になった場合の最低保証ダメージ
+        if (dmg === 0 && effectiveness > 0) dmg = 1;
+
+        dList.push(dmg);
+      }
+      return { list: dList, effectiveness };
+    };
+
+    // 💡 通常ダメージと急所ダメージを両方計算する
+    const normalData = calcDamageArray(false);
+    const critData = calcDamageArray(true);
+
+    // 💡 一撃確率は「ステロダメージを引いた後のHP（startHp）」で判定する
+    const ohkoCount = normalData.list.filter((d) => d >= startHp).length;
+    const ohkoProb = isDeadByEntry ? 100 : (ohkoCount / 16) * 100;
+
+    const minHits = simulateSurvival(finalHp, normalData.list[15], defItem); 
+    const maxHits = simulateSurvival(finalHp, normalData.list[0], defItem);
 
     return {
-      min: damageList[0], max: damageList[15], hp: finalHp,
-      effectiveness, ohkoProb, isStatus: false,
-      damageList,
-      survival: { minHits, maxHits }
+      min: normalData.list[0], max: normalData.list[15], hp: finalHp,
+      effectiveness: normalData.effectiveness, ohkoProb, isStatus: false,
+      damageList: normalData.list, // 通常ダメージリスト（getSurvivalText用）
+      critDamageList: critData.list, // 急所ダメージリスト（UI表示用）
+      survival: { minHits, maxHits },
+      isDeadByEntry // ステロ等で死ぬかのフラグ（バッジ表示用）
     };
   };
-
 
 
   // 計算結果を変数に格納（nullの可能性もあるので注意）
@@ -1727,59 +1748,69 @@ const getSurvivalText = (res: any, item: any) => {
         </section>
       </div>
 
-      {/* 計算結果表示エリア */}
-<div className={styles.resultArea}>
-  <div className={styles.resultCard}>
-    
-    {!res ? (
-      <p className={styles.placeholderText}>ポケモンと技を選択してダメージを測定</p>
-    ) : res.isStatus ? (
-      <h2 className={styles.statusMoveText}>変化技（ダメージなし）</h2>
-    ) : (
-      <>
-        {/* 1. 状態バッジ */}
-        {(() => {
-          const badge = getBadgeStyle(res.ohkoProb);
-          return (
-            <div className={styles.badgeWrapper}>
-              <span className={styles.resultBadge} style={{ backgroundColor: badge.bg, color: badge.text }}>
-                {badge.label}
-              </span>
-            </div>
-          );
-        })()}
-
-        {/* 2. ダメージ数値 */}
-        <div className={styles.damageTextWrapper}>
-          <p className={styles.damageLabel}>ダメージ範囲</p>
-          <h2 className={styles.damageRange}>
-            {res.effectiveness === 0 ? "0" : `${Math.max(1, res.min)} 〜 ${Math.max(1, res.max)}`}
-          </h2>
-          <p className={styles.damagePercent}>
-            （{((res.min / res.hp) * 100).toFixed(1)}% 〜 {((res.max / res.hp) * 100).toFixed(1)}%）
-          </p>
-        </div>
-
-        {/* 3. HPバー */}
-        {res.effectiveness > 0 && <DamageBar hp={res.hp} minDam={res.min} maxDam={res.max} />}
-
-        {/* 4. 確定数エリア（ここが劇的に短くなりました） */}
-        {(() => {
-          const survival = getSurvivalText(res, defItem);
-          return (
-            <div className={styles.survivalWrapper}>
-              <div className={styles.survivalMain} style={{ color: survival.color }}>
-                {survival.text}
-                {survival.sub && <span className={styles.survivalSub}>{survival.sub}</span>}
+{/* 計算結果表示エリア */}
+      <div className={styles.resultArea}>
+        <div className={styles.resultCard}>
+          {!res ? (
+            <p style={{ textAlign: "center", color: "#999" }}>ポケモンと技を選択してダメージを測定</p>
+          ) : res.isStatus ? (
+            <h2 style={{ textAlign: "center", color: "#888" }}>変化技（ダメージなし）</h2>
+          ) : (
+            <>
+              {/* 1. 状態バッジ */}
+              <div className={styles.badgeArea}>
+                {(() => {
+                  // 💡 ステロ等の設置技で即死する場合は、警告バッジを出す
+                  if (res.isDeadByEntry) {
+                    return <span className={styles.badge} style={{ backgroundColor: "#fee2e2", color: "#ef4444" }}>設置技等で瀕死</span>;
+                  }
+                  const badge = getBadgeStyle(res.ohkoProb);
+                  return (
+                    <span className={styles.badge} style={{ backgroundColor: badge.bg, color: badge.text }}>
+                      {badge.label}
+                    </span>
+                  );
+                })()}
               </div>
-              <p className={styles.effectivenessText}>相性倍率: {res.effectiveness}x</p>
-            </div>
-          );
-        })()}
-      </>
-    )}
-  </div>
-</div>
+
+              {/* 2. ダメージ数値 */}
+              <div style={{ textAlign: "center" }}>
+                <p style={{ fontSize: "0.9rem", color: "#666", marginBottom: "0" }}>通常ダメージ</p>
+                <h2 className={styles.damageMain}>
+                  {res.effectiveness === 0 ? "0" : `${Math.max(1, res.min)} 〜 ${Math.max(1, res.max)}`}
+                </h2>
+                <p className={styles.damageSub}>
+                  （{((res.min / res.hp) * 100).toFixed(1)}% 〜 {((res.max / res.hp) * 100).toFixed(1)}%）
+                </p>
+
+                {/* 💡 急所ダメージを常に小さく赤字で表示 */}
+                {res.effectiveness > 0 && res.critDamageList && (
+                  <div style={{ marginTop: "10px", fontSize: "0.95rem", color: "#ef4444", fontWeight: "bold" }}>
+                    急所時: {res.critDamageList[0]} 〜 {res.critDamageList[15]} ({((res.critDamageList[0] / res.hp) * 100).toFixed(1)}% 〜 {((res.critDamageList[15] / res.hp) * 100).toFixed(1)}%)
+                  </div>
+                )}
+              </div>
+
+              {/* 3. HPバー */}
+              {res.effectiveness > 0 && <DamageBar hp={res.hp} minDam={res.min} maxDam={res.max} />}
+
+              {/* 4. 確定数エリア（お客様の書いた関数をそのまま呼び出す） */}
+              {(() => {
+                const survival = getSurvivalText(res, defItem);
+                return (
+                  <div className={styles.survivalBox}>
+                    <div className={styles.survivalText} style={{ color: survival.color }}>
+                      {survival.text}
+                      {survival.sub && <span style={{ fontSize: "0.8rem", display: "block", color: "#666", marginTop: "4px" }}>{survival.sub}</span>}
+                    </div>
+                    <p style={{ margin: "5px 0 0", fontSize: "0.9rem", color: "#888" }}>相性倍率: {res.effectiveness}x</p>
+                  </div>
+                );
+              })()}
+            </>
+          )}
+        </div>
+      </div>
     </main>
   );
 }
