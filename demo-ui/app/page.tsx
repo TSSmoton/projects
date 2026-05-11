@@ -304,7 +304,8 @@ const ITEMS: Item[] = [
   { name: "命の珠", multiplier: 1.3, type: "dmg" },
   { name: "こだわりハチマキ", multiplier: 1.5, type: "atk" },
   { name: "こだわりメガネ", multiplier: 1.5, type: "spa" },
-  { name: "ちからのハチマキ", multiplier: 1.1, type: "dmg" },
+  { name: "ちからのハチマキ", multiplier: 1.1, type: "atk" },
+  { name: "ものしりメガネ", multiplier: 1.1, type: "spa" },
   { name: "タイプ強化アイテム", multiplier: 1.2, type: "dmg" },
   { name: "たつじんのおび", multiplier: 1.2, type: "dmg" },
   { name: "とつげきチョッキ", multiplier: 1.5, type: "spd" },
@@ -316,12 +317,14 @@ const ITEMS: Item[] = [
 const RELEVANT_ABILITIES = [
   // { name: "なし", multiplier: 1.0 },
   { name: "てきおうりょく", multiplier: 2.0 }, // タイプ一致が2倍に(技側で計算)
-  { name: "ちからもち", multiplier: 2.0 }, // 攻撃2倍
+  { name: "ちからもち", multiplier: 2.0 }, // 物理技2倍
+  { name: "ヨガパワー", multiplier: 2.0 }, // 物理技2倍
   { name: "かたいツメ", multiplier: 1.3 }, // 直接攻撃1.3倍
   { name: "マルチスケイル", multiplier: 0.5 }, // ダメージ半減
   { name: "いかく", multiplier: 1.0 },
-  { name: "こんじょう", multiplier: 1.5 }, // 状態異常で攻撃1.5倍
-  { name: "テクニシャン", multiplier: 1.5 }, // 威力60以下の技で攻撃1.5倍(技側で計算)
+  { name: "こんじょう", multiplier: 1.5 }, // 状態異常でこうげき1.5倍、やけどの半減無効
+  { name: "テクニシャン", multiplier: 1.5 }, // 威力60以下の技で威力1.5倍
+  { name: "おやこあい", multiplier: 1.25 }, // 全ての攻撃が1.25倍
 ];
 
 // ランク補正の倍率表（-6〜+6）
@@ -434,6 +437,8 @@ export default function Home() {
   const [defRank, setDefRank] = useState(0);
   // 攻撃側のやけど状態
   const [isAtkBurned, setIsAtkBurned] = useState(false);
+// 急所判定
+  const [isCritical, setIsCritical] = useState(false);
   /**
    * 新システム対応：ステータス実数値計算
    * @param evLevel 0〜32の努力レベル
@@ -552,7 +557,7 @@ const calculateResult = () => {
 
     // 0. 技の「威力 (Power)」の計算
     let currentPower = selectedMove.power;
-    let currentMoveType = selectedMove.type; // 👈 今後はこれを使います
+    let currentMoveType = selectedMove.type; 
 
     // 💡 ウェザーボールの動的変化
     if (selectedMove.name === "ウェザーボール" && weather !== "none") {
@@ -564,74 +569,86 @@ const calculateResult = () => {
     }
   
   
-    const hasFairyAura = atkAbility === "フェアリーオーラ" || defAbility === "フェアリーオーラ";
-    const hasAuraBreak = atkAbility === "オーラブレイク" || defAbility === "オーラブレイク";
-    if (hasFairyAura && selectedMove.type === "フェアリー") {
-      const auraMultiplier = hasAuraBreak ? 0.75 : 1.33;
-      currentPower = Math.floor(currentPower * auraMultiplier);
-    }
+  const hasFairyAura = atkAbility === "フェアリーオーラ" || defAbility === "フェアリーオーラ";
+  const hasAuraBreak = atkAbility === "オーラブレイク" || defAbility === "オーラブレイク";
+  if (hasFairyAura && selectedMove.type === "フェアリー") {
+    const auraMultiplier = hasAuraBreak ? 0.75 : 1.33;
+    currentPower = Math.floor(currentPower * auraMultiplier);
+  }
 
-    const isAtkGrounded = attacker.type1 !== "ひこう" && attacker.type2 !== "ひこう" && atkAbility !== "ふゆう";
-    if (isAtkGrounded) {
-      if (terrain === "electric" && currentMoveType === "でんき") currentPower = Math.floor(currentPower * 1.3);
-      else if (terrain === "grassy" && currentMoveType === "くさ") currentPower = Math.floor(currentPower * 1.3);
-      else if (terrain === "psychic" && currentMoveType === "エスパー") currentPower = Math.floor(currentPower * 1.3);
-    }
-    if (terrain === "grassy" && ["じしん", "じならし", "マグニチュード"].includes(selectedMove.name)) {
-      currentPower = Math.floor(currentPower * 0.5);
-    }
+  const isAtkGrounded = attacker.type1 !== "ひこう" && attacker.type2 !== "ひこう" && atkAbility !== "ふゆう";
+  if (isAtkGrounded) {
+    if (terrain === "electric" && currentMoveType === "でんき") currentPower = Math.floor(currentPower * 1.3);
+    else if (terrain === "grassy" && currentMoveType === "くさ") currentPower = Math.floor(currentPower * 1.3);
+    else if (terrain === "psychic" && currentMoveType === "エスパー") currentPower = Math.floor(currentPower * 1.3);
+  }
+  if (terrain === "grassy" && ["じしん", "じならし", "マグニチュード"].includes(selectedMove.name)) {
+    currentPower = Math.floor(currentPower * 0.5);
+  }
 
-    if (atkAbility === "かたいツメ" && isPhysical) {
-      currentPower = Math.floor(currentPower * atkAbil.multiplier);
-    }
+  // 将来的にiscontactフラグを技データに入れて、かたいツメの補正を接触技に限定する
+  if (atkAbility === "かたいツメ" && isPhysical) {
+    currentPower = Math.floor(currentPower * atkAbil.multiplier);
+  }
 
-    // 1. 攻撃力 (A) の計算
-    let a = calcStat(isPhysical ? attacker.attack : attacker.spAttack, atkEv, atkNature);
-    a = Math.floor(a * RANK_MODIFIERS[atkRank]);
-    if (atkAbility === "ちからもち" && isPhysical) a = Math.floor(a * atkAbil.multiplier);
-    if (atkItem.type === (isPhysical ? "atk" : "spa")) a = Math.floor(a * atkItem.multiplier);
-    if (isAtkBurned && isPhysical) {
-      a = atkAbility === "こんじょう" ? Math.floor(a * atkAbil.multiplier) : Math.floor(a * 0.5);
-    }
+  // 1. 攻撃力 (A) の計算
+  let a = calcStat(isPhysical ? attacker.attack : attacker.spAttack, atkEv, atkNature);
+  a = Math.floor(a * RANK_MODIFIERS[atkRank]);
+  // 特性補正：ちからもち・ヨガパワーを物理技に限定して適用
+  if ((atkAbility === "ちからもち" || atkAbility === "ヨガパワー") && isPhysical) a = Math.floor(a * atkAbil.multiplier);
+  // アイテム補正：こだわりハチマキを物理技、こだわりメガネを特殊技に限定して適用
+  if (atkItem.type === (isPhysical ? "atk" : "spa")) a = Math.floor(a * atkItem.multiplier);
+  
+  // おやこあいの場合、全ての攻撃で倍率をかける（物理・特殊両方に対応）
+  if (atkAbility === "おやこあい") dmg = Math.floor(dmg * atkAbil.multiplier);
+  // テクニシャンの威力アップも物理・特殊両方に対応させる（ただし、威力60以下の技に限定）
+  if (atkAbility === "テクニシャン" && selectedMove.power <= 60) dmg = Math.floor(dmg * atkAbil.multiplier);
+  
+  // こんじょうのやけど無効と攻撃1.5倍を同時に処理、こんじょう以外ならやけどの半減も適用
+  if (isAtkBurned && isPhysical) {
+    a = atkAbility === "こんじょう" ? Math.floor(a * atkAbil.multiplier) : Math.floor(a * 0.5);
+  }
 
-    // 2. 防御力 (D) の計算
-    const targetsPhysicalDef = ["サイコショック", "サイコブレイク", "しんぴのつるぎ"].includes(selectedMove.name);
-    const usesPhysicalStat = isPhysical || targetsPhysicalDef;
+  // 2. 防御力 (D) の計算
+  const targetsPhysicalDef = ["サイコショック", "サイコブレイク", "しんぴのつるぎ"].includes(selectedMove.name);
+  const usesPhysicalStat = isPhysical || targetsPhysicalDef;
 
-    let d = calcStat(usesPhysicalStat ? defender.defense : defender.spDefense, defEv, defNature);
-    d = Math.floor(d * RANK_MODIFIERS[defRank]);
-    if (defItem.type === (usesPhysicalStat ? "def" : "spd")) d = Math.floor(d * defItem.multiplier);
+  let d = calcStat(usesPhysicalStat ? defender.defense : defender.spDefense, defEv, defNature);
+  d = Math.floor(d * RANK_MODIFIERS[defRank]);
+  if (defItem.type === (usesPhysicalStat ? "def" : "spd")) d = Math.floor(d * defItem.multiplier);
 
-    if (weather === "sand" && !usesPhysicalStat && (defender.type1 === "いわ" || defender.type2 === "いわ")) d = Math.floor(d * 1.5);
-    if (weather === "snow" && usesPhysicalStat && (defender.type1 === "こおり" || defender.type2 === "こおり")) d = Math.floor(d * 1.5);
+  if (weather === "sand" && !usesPhysicalStat && (defender.type1 === "いわ" || defender.type2 === "いわ")) d = Math.floor(d * 1.5);
+  if (weather === "snow" && usesPhysicalStat && (defender.type1 === "こおり" || defender.type2 === "こおり")) d = Math.floor(d * 1.5);
 
-    // 3. 基本ダメージ計算
-    let baseDamage = Math.floor(Math.floor((Math.floor((2 * 50) / 5 + 2) * currentPower * a) / d) / 50 + 2);
+  // 3. 基本ダメージ計算
+  let baseDamage = Math.floor(Math.floor((Math.floor((2 * 50) / 5 + 2) * currentPower * a) / d) / 50 + 2);
 
-    if (weather === "sun") {
-      if (currentMoveType === "ほのお") baseDamage = Math.floor(baseDamage * 1.5);
-      if (currentMoveType === "みず") baseDamage = Math.floor(baseDamage * 0.5);
-    } else if (weather === "rain") {
-      if (currentMoveType === "みず") baseDamage = Math.floor(baseDamage * 1.5);
-      if (currentMoveType === "ほのお") baseDamage = Math.floor(baseDamage * 0.5);
-    }
+  if (weather === "sun") {
+    if (currentMoveType === "ほのお") baseDamage = Math.floor(baseDamage * 1.5);
+    if (currentMoveType === "みず") baseDamage = Math.floor(baseDamage * 0.5);
+  } else if (weather === "rain") {
+    if (currentMoveType === "みず") baseDamage = Math.floor(baseDamage * 1.5);
+    if (currentMoveType === "ほのお") baseDamage = Math.floor(baseDamage * 0.5);
+  }
 
-    const isDefGrounded = defender.type1 !== "ひこう" && defender.type2 !== "ひこう" && defAbility !== "ふゆう";
-    if (terrain === "misty" && currentMoveType === "ドラゴン" && isDefGrounded) {
-      baseDamage = Math.floor(baseDamage * 0.5);
-    }
+  
+  // ミストフィールドのドラゴン技半減効果は、地面にいるポケモンにのみ適用される（ふゆうやひこうタイプは対象外）
+  const isDefGrounded = defender.type1 !== "ひこう" && defender.type2 !== "ひこう" && defAbility !== "ふゆう";
+  if (terrain === "misty" && currentMoveType === "ドラゴン" && isDefGrounded) {
+    baseDamage = Math.floor(baseDamage * 0.5);
+  }
 
-    // 4. 乱数展開 ＆ 相性判定
-    const stabMod = (currentMoveType === attacker.type1 || currentMoveType === attacker.type2)
-        ? (atkAbility === "てきおうりょく" ? 2.0 : 1.5) : 1.0;
+  // 4. 乱数展開 ＆ 相性判定
+  const stabMod = (currentMoveType === attacker.type1 || currentMoveType === attacker.type2)
+      ? (atkAbility === "てきおうりょく" ? 2.0 : 1.5) : 1.0;
 
-// tType に null と undefined の両方を許可する
-    const getTypeMultiplier = (mType: string, tType: string | null | undefined, abil: string) => {
-      if (!tType) return 1.0;
-      let m = TYPE_CHART[mType]?.[tType] ?? 1.0;
-      if ((abil === "きもったま" || abil === "マインドアイ") && tType === "ゴースト" && (mType === "ノーマル" || mType === "かくとう") && m === 0) return 1.0;
-      return m;
-    };
+  // tType に null と undefined の両方を許可する
+  const getTypeMultiplier = (mType: string, tType: string | null | undefined, abil: string) => {
+    if (!tType) return 1.0;
+    let m = TYPE_CHART[mType]?.[tType] ?? 1.0;
+    if ((abil === "きもったま" || abil === "マインドアイ") && tType === "ゴースト" && (mType === "ノーマル" || mType === "かくとう") && m === 0) return 1.0;
+    return m;
+  };
 
     
   const type1Mod = getTypeMultiplier(currentMoveType, defender.type1, atkAbility);
@@ -640,26 +657,34 @@ const calculateResult = () => {
    
   let effectiveness = type1Mod * type2Mod;
 
+  // ふゆうの無効判定を追加（ただし、かたやぶりは無効にしない）
   if (defAbility === "ふゆう" && currentMoveType === "じめん" && atkAbility !== "かたやぶり") effectiveness = 0;
     
   // ほのお・こおり技に対するあついしぼうの半減効果を追加
   if (defAbility === "あついしぼう" && (currentMoveType === "ほのお" || currentMoveType === "こおり")) effectiveness = effectiveness * 0.5;
 
-    const damageList = [];
+  const damageList = [];
     for (let i = 85; i <= 100; i++) {
       let dmg = Math.floor((baseDamage * i) / 100);
       dmg = Math.floor(dmg * stabMod);
       dmg = Math.floor(dmg * effectiveness);
 
-      // ★アイテム補正：たつじんのおびを「抜群のみ」に限定
+      // アイテム補正（たつじんのおびを「抜群のみ」に適用
       if (atkItem.name === "たつじんのおび") {
         if (effectiveness > 1) dmg = Math.floor(dmg * atkItem.multiplier);
+      //その他のダメージ増加アイテムは全てのダメージに適用）
       } else if (atkItem.type === "dmg") {
         dmg = Math.floor(dmg * atkItem.multiplier);
       }
 
+
+      // 特性補正：マルチスケイルはHP満タンのときのみダメージ半減
       if (defAbility === "マルチスケイル" && isFullHp) dmg = Math.floor(dmg * defAbil.multiplier);
+
+      // ダメージが0になった場合の最低保証ダメージ
       if (dmg === 0 && effectiveness > 0) dmg = 1;
+
+      // ダメージリストに追加
       damageList.push(dmg);
     }
 
